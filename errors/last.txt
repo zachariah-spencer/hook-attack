@@ -1,0 +1,4 @@
+* EXCEPTION: 'watch': wrong number of arguments (0 for 1)
+** Backtrace:
+*** app/game.rb:9:in tick
+*** app/main.rb:8:in tick
