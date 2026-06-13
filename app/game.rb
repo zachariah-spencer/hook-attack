@@ -14,7 +14,10 @@ class Game
       b: 0,
       dx: 0,
       dy: 0,
-      facing: 1,
+      direction: 1, 
+      acceleration: 0.6,
+      deceleration: 0.35,
+      max_speed: 5.0,
       attacking: false,
       attacked_tick: -100
     }
@@ -49,23 +52,35 @@ class Game
     outputs.background_color = [40,40,40]
     outputs.solids << state.player
     outputs.watch "PLAYER X: #{state.player.x}"
-    outputs.watch "PLAYER DIRECTION: #{state.player.facing}"
+    outputs.watch "PLAYER DIRECTION: #{state.player.direction}"
+    outputs.watch "PLAYER DX: #{state.player.dx}"
   end
 
   def calc_gravity
-    state.player.y -= 5
+    state.player.y -= 5.0
   end
 
   def calc_player_movement
-    state.player.dx += state.player_move_direction * 5
-    
-    if state.player_move_direction > 0
-      state.player.facing = 1
-    elsif state.player_move_direction < 0
-      state.player.facing = -1
-    end
+    target_dx = state.player_move_direction * state.player.max_speed
 
-    state.player.x += state.player_move_direction * 5
+    if state.player.dx < target_dx
+      state.player.dx = [state.player.dx + state.player.acceleration, target_dx].min
+    elsif state.player.dx > target_dx
+      state.player.dx = [state.player.dx - state.player.deceleration, target_dx].max
+    end
+    state.player.x += state.player.dx
+
+    state.player.direction = player_direction?
+  end
+
+  def player_direction?
+    if state.player_move_direction > 0
+      1
+    elsif state.player_move_direction < 0
+      -1
+    else
+      state.player.direction
+    end
   end
 
   def calc_collisions
