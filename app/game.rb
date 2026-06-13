@@ -12,6 +12,9 @@ class Game
       r: 255,
       g: 0,
       b: 0,
+      dx: 0,
+      dy: 0,
+      facing: 1,
       attacking: false,
       attacked_tick: -100
     }
@@ -24,9 +27,9 @@ class Game
   end
 
   def input
-    state.player_x = 0
-    state.player_x -= 1 if inputs.keyboard.left
-    state.player_x += 1 if inputs.keyboard.right
+    state.player_move_direction = 0
+    state.player_move_direction -= 1 if inputs.keyboard.left
+    state.player_move_direction += 1 if inputs.keyboard.right
     state.player_attack = inputs.keyboard.key_down.space
   end
 
@@ -45,6 +48,8 @@ class Game
   def render
     outputs.background_color = [40,40,40]
     outputs.solids << state.player
+    outputs.watch "PLAYER X: #{state.player.x}"
+    outputs.watch "PLAYER DIRECTION: #{state.player.facing}"
   end
 
   def calc_gravity
@@ -52,7 +57,15 @@ class Game
   end
 
   def calc_player_movement
-    state.player.x += state.player_x * 5
+    state.player.dx += state.player_move_direction * 5
+    
+    if state.player_move_direction > 0
+      state.player.facing = 1
+    elsif state.player_move_direction < 0
+      state.player.facing = -1
+    end
+
+    state.player.x += state.player_move_direction * 5
   end
 
   def calc_collisions
