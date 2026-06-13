@@ -1,4 +1,18 @@
-* EXCEPTION: 'watch': wrong number of arguments (0 for 1)
+* EXCEPTION:
+* ERROR: :elapsed_time method missing on ~NilClass~.
+
+#+begin_src ~NilClass#inspect~
+nil
+#+end_src ~NilClass#inspect~
+
+
+
+The method named
+  :elapsed_time
+doesn't exist on [NilClass, NilClassFalseClass].
+
+(suggestions above)
 ** Backtrace:
-*** app/game.rb:9:in tick
-*** app/main.rb:8:in tick
+*** app/game.rb:38:in calc
+*** app/game.rb:22:in tick
+*** app/main.rb:13:in tick
