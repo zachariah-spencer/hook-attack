@@ -7,6 +7,9 @@ class Game
   MAX_ROCK_FALL_SPEED = 7.0
   MIN_ROCK_SPAWN_X = 32
   MAX_ROCK_SPAWN_X = (Grid.w - 32)
+  HOOK_DURATION = 0.75.seconds
+  HOOK_HITBOX_DURATION = 0.1.seconds
+  PLAYER_FALL_SPEED = 2.5
 
   def initialize args; end
 
@@ -26,8 +29,8 @@ class Game
       acceleration: 0.6,
       deceleration: 0.35,
       max_speed: 5.0,
-      attack_duration: 0.5.seconds,
       attacked_tick: nil,
+      grappling_tick: nil,
     }
     state.hook = {
       x: (state.player.x / 2) - 4,
@@ -66,14 +69,9 @@ class Game
   end
 
   def calc
-    calc_gravity
     calc_player
     calc_hook
     calc_rocks
-
-    state.player.attacked_tick = Kernel.tick_count if state.player_attack_input && !player_attacking?
-    state.player.attacked_tick = nil if state.player.attacked_tick && !player_attacking?
-
     calc_collisions
   end
 
@@ -82,13 +80,12 @@ class Game
     outputs.solids << state.player
     outputs.solids << state.hook if player_attacking?
     state.rock_manager.rocks.each { |r| outputs.solids << r }
-  end
 
-  def calc_gravity
-    state.player.y -= 2.5
+    outputs.watch "HOOK HITBOX ACTIVE? #{state.hook.active}"
   end
 
   def calc_player
+    # calc velocity
     target_dx = state.player.move_direction * state.player.max_speed
 
     if state.player.dx < target_dx
@@ -96,9 +93,17 @@ class Game
     elsif state.player.dx > target_dx
       state.player.dx = [state.player.dx - state.player.deceleration, target_dx].max
     end
-    state.player.x += state.player.dx
 
+    # calc facing direction
     state.player.face_direction = player_direction?
+
+    # apply velocity
+    state.player.x += state.player.dx
+    state.player.y -= PLAYER_FALL_SPEED
+
+    # calc attacking
+    state.player.attacked_tick = Kernel.tick_count if state.player_attack_input && !player_attacking?
+    state.player.attacked_tick = nil if state.player.attacked_tick && !player_attacking?
   end
 
   def calc_hook
@@ -114,12 +119,27 @@ class Game
     
     state.hook.x = hook_side_x
     state.hook.y = center_of_player_y
+    
+    state.hook.active = hook_hitbox_active?
   end
 
   def calc_collisions
     state.player.x = 0 if state.player.x <= 0
     state.player.x = Grid.w - state.player.w if state.player.x >= Grid.w - state.player.w
     state.player.y = Grid.h if state.player.y <= (0 - state.player.h)
+
+    state.hook.b = state.hook.active ? 255 : 0
+
+    # everything below this handles hook collisions if the hitbox for it is active
+    return unless state.hook.active
+
+    rocks_hit = []
+    state.rock_manager.rocks.each { |r| rocks_hit << r if state.hook.intersect_rect?(r) }
+    state.hook.hit_target = find_first_rock_hit(rocks_hit)
+
+    if state.hook.hit_target
+      state.player.grappling_tick = Kernel.tick_count
+    end
   end
 
   def calc_rocks
@@ -139,6 +159,18 @@ class Game
     state.rock_manager.rocks.reject! { |r| r.y < -32 }
   end
 
+  def find_first_rock_hit(hits_array)
+    return nil if hits_array.empty?
+
+    if state.hook.direction > 0
+      player_edge_x = state.player.x + state.player.w
+      hits_array.min_by { |r| r.x - player_edge_x }
+    elsif state.hook.direction < 0
+      player_edge_x = state.player.x
+      hits_array.min_by { |r| player_edge_x - (r.x + r.w)}
+    end
+  end
+
   def player_direction?
     if state.player.move_direction > 0
       1
@@ -150,8 +182,15 @@ class Game
   end
 
   def player_attacking?
+    return false if state.player.grappling_tick
     return false unless state.player.attacked_tick
-    state.player.attacked_tick.elapsed_time <= state.player.attack_duration
+    state.player.attacked_tick.elapsed_time <= HOOK_DURATION
+  end
+
+  def hook_hitbox_active?
+    return false if state.player.grappling_tick
+    return false unless state.player.attacked_tick
+    state.player.attacked_tick.elapsed_time <= HOOK_DURATION && state.player.attacked_tick.elapsed_time > (HOOK_DURATION - HOOK_HITBOX_DURATION)
   end
 
   def rock(spawn_x:, fall_speed:)

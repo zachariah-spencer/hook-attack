@@ -1,28 +1,19 @@
 * EXCEPTION:
-* ERROR: :calc_player method missing on ~Game~.
+* ERROR: :elapsed_time method missing on ~NilClass~.
 
-#+begin_src ~Game#inspect~
-#<Game:0x21a11129080 @state={:tick_count=>4004, :player=>{:x=>653.15, :y=>572.5, :w=>32, :h=>32, :r=>0, :g=>255, :b=>255, :dx=>0.0, :dy=>0, :face_direction=>-1, :move_direction=>0, :acceleration=>0.6, :deceleration=>0.35, :max_speed=>5.0, :attack_duration=>30.0, :attacked_tick=>nil}, :hook=>{:x=>397.15, :y=>575.0, :w=>256, :h=>32, :r=>255, :g=>0, :b=>0, :a=>100, :direction=>-1, :active=>false, :hit_target=>nil}, :rock_manager=>{:rocks=>[{:x=>473, :y=>200.7311558818312, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.209654655822006}, {:x=>431, :y=>243.3717141680824, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.12780484746392}, {:x=>621, :y=>299.6630802656658, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.030613138813202}, {:x=>254, :y=>136.5765316776402, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>3.55746017269731}, {:x=>250, :y=>342.1386330323638, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.570485489575772}, {:x=>165, :y=>110.1477903384118, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.484207423982258}, {:x=>938, :y=>94.67496523509544, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.042943828749224}, {:x=>636, :y=>149.7363875503038, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.702636124496962}, {:x=>123, :y=>386.904007416894, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.626333230320908}, {:x=>275, :y=>555.6659593620952, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>3.8217218753001}, {:x=>172, :y=>616.0697537162502, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.157209851349986}, {:x=>991, :y=>679.7222790330934, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.876980069064764}, {:x=>835, :y=>707.6596614922534, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.468067701549284}], :rock_spawned_at=>3999, :next_rock_spawn_delay=>10.22705449448596, :next_rock_spawn_x=>1181, :next_rock_dy=>3.84571417673624}, :player_attack_input=>nil}, @outputs=#<GTK::TopLevelOutputs:0x21a00574220>, @inputs=#<GTK::Inputs:0x21a00579170>, @args=#<GTK::Args:0x21a00579230>>
-#+end_src ~Game#inspect~
+#+begin_src ~NilClass#inspect~
+nil
+#+end_src ~NilClass#inspect~
 
-** Did you mean?
-Here's a list of methods that kind of look like :calc_player.
-*** :calc_player_movement
-*** :calc
-*** :calc_collisions
-*** :calc_gravity
-*** :calc_hook
-*** :calc_hook_movement
-*** :calc_rocks
-*** :player_attacking?
-*** :player_direction?
+
 
 The method named
-  :calc_player
-doesn't exist on [Game, #<Class:#<Game:0x21a11129080>>, AttrDR].
+  :elapsed_time
+doesn't exist on [NilClass, NilClassFalseClass].
 
 (suggestions above)
 ** Backtrace:
-*** app/game.rb:70:in calc
-*** app/game.rb:57:in tick
+*** app/game.rb:187:in player_attacking?
+*** app/game.rb:81:in render
+*** app/game.rb:61:in tick
 *** app/main.rb:13:in tick
