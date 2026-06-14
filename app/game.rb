@@ -138,6 +138,7 @@ class Game
     state.hook.hit_target = find_first_rock_hit(rocks_hit)
 
     if state.hook.hit_target
+      #TODO: Make the grapple happen and the rock disappear on-hit
       state.player.grappling_tick = Kernel.tick_count
     end
   end
