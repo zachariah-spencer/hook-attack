@@ -1,10 +1,47 @@
 class Game
   attr_dr
 
-  MIN_ROCK_SPAWN_DELAY = 0.05.seconds
-  MAX_ROCK_SPAWN_DELAY = 0.25.seconds
-  MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 2
-  MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 5
+
+  DIFFICULTY_RAMP_DURATION = 105.seconds
+  EASY_TO_MEDIUM_DIFFICULTY_DURATION = 35.seconds
+  MEDIUM_TO_HARD_DIFFICULTY_DURATION = 70.seconds
+
+  EASY_MIN_ROCK_SPAWN_DELAY = 0.34.seconds
+  EASY_MAX_ROCK_SPAWN_DELAY = 0.60.seconds
+  EASY_MIN_DOWN_ROCK_SPAWN_COUNTDOWN = 10
+  EASY_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 14
+  EASY_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 9
+  EASY_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 13
+  EASY_MIN_ROCK_FALL_SPEED = 3.8
+  EASY_MAX_ROCK_FALL_SPEED = 5.3
+
+  MEDIUM_MIN_ROCK_SPAWN_DELAY = 0.24.seconds
+  MEDIUM_MAX_ROCK_SPAWN_DELAY = 0.44.seconds
+  MEDIUM_MIN_DOWN_ROCK_SPAWN_COUNTDOWN = 7
+  MEDIUM_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 10
+  MEDIUM_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 7
+  MEDIUM_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 10
+  MEDIUM_MIN_ROCK_FALL_SPEED = 4.6
+  MEDIUM_MAX_ROCK_FALL_SPEED = 6.2
+
+  HARD_MIN_ROCK_SPAWN_DELAY = 0.16.seconds
+  HARD_MAX_ROCK_SPAWN_DELAY = 0.34.seconds
+  HARD_MIN_DOWN_ROCK_SPAWN_COUNTDOWN = 4
+  HARD_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 7
+  HARD_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 6
+  HARD_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 9
+  HARD_MIN_ROCK_FALL_SPEED = 5.2
+  HARD_MAX_ROCK_FALL_SPEED = 7.2
+
+
+
+
+  MIN_ROCK_SPAWN_DELAY = 0.03.seconds
+  MAX_ROCK_SPAWN_DELAY = 0.28.seconds
+  MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 8
+  MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 10
+  MIN_DOWN_ROCK_SPAWN_COUNTDOWN = 8
+  MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 11
   MIN_ROCK_FALL_SPEED = 4.5
   MAX_ROCK_FALL_SPEED = 7.0
   MIN_ROCK_SPAWN_X = 32
@@ -18,13 +55,14 @@ class Game
   PLAYER_JUMP_VELOCITY = 22.0
   PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
-  SPECIAL_ROCK_TYPES = [:down_rock, :up_rock, :bomb_rock]
+  SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock]
 
   def initialize args
   end
 
   def start 
     state.input_active = true
+    state.run_started_tick = Kernel.tick_count
 
     state.player = {
       x: 50,
@@ -54,19 +92,21 @@ class Game
       r: 255,
       g: 0,
       b: 0,
-      a: 100,
+      a: 255,
       direction: 1,
       active: false,
       hit_target: nil
     }
 
+    difficulty = calc_current_difficulty_levers
     state.rock_manager = {
       rocks: [],
       rock_spawned_at: 0,
-      next_rock_spawn_delay: Numeric.rand(MIN_ROCK_SPAWN_DELAY..MAX_ROCK_SPAWN_DELAY),
+      next_rock_spawn_delay: Numeric.rand(difficulty.min_rock_spawn_delay..difficulty.max_rock_spawn_delay),
       next_rock_spawn_x: Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X),
-      next_rock_dy: Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED),
-      next_special_rock_spawn_countdown: Numeric.rand(MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN..MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN)
+      next_rock_dy: Numeric.rand(difficulty.min_rock_fall_speed..difficulty.max_rock_fall_speed),
+      next_special_rock_spawn_countdown: Numeric.rand(difficulty.min_special_rock_spawn_countdown..difficulty.max_special_rock_spawn_countdown),
+      next_down_rock_spawn_countdown: Numeric.rand(difficulty.min_down_rock_spawn_countdown..difficulty.max_down_rock_spawn_countdown),
     }
 
     state.player_offscreen_indicator = {
@@ -281,20 +321,29 @@ class Game
   end
 
   def select_rock_type_to_spawn
-    if state.rock_manager.next_special_rock_spawn_countdown == 0
-      state.rock_manager.next_special_rock_spawn_countdown = Numeric.rand(MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN..MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN)
-      return SPECIAL_ROCK_TYPES.sample
-    else
-      state.rock_manager.next_special_rock_spawn_countdown -= 1
-      return :basic_rock
+    difficulty = calc_current_difficulty_levers
+    state.rock_manager.next_special_rock_spawn_countdown -= 1
+    state.rock_manager.next_down_rock_spawn_countdown -= 1
+
+    if state.rock_manager.next_down_rock_spawn_countdown <= 0
+      state.rock_manager.next_down_rock_spawn_countdown = Numeric.rand(difficulty.min_down_rock_spawn_countdown..difficulty.max_down_rock_spawn_countdown)
+      return :down_rock
     end
+
+    if state.rock_manager.next_special_rock_spawn_countdown <= 0
+      state.rock_manager.next_special_rock_spawn_countdown = Numeric.rand(difficulty.min_special_rock_spawn_countdown..difficulty.max_special_rock_spawn_countdown)
+      return SPECIAL_ROCK_TYPES.sample
+    end
+      
+    :basic_rock 
   end
 
   def reset_rock_spawn_variables
+    difficulty = calc_current_difficulty_levers
     state.rock_manager.rock_spawned_at = Kernel.tick_count
-    state.rock_manager.next_rock_spawn_delay = Numeric.rand(MIN_ROCK_SPAWN_DELAY..MAX_ROCK_SPAWN_DELAY)
+    state.rock_manager.next_rock_spawn_delay = Numeric.rand(difficulty.min_rock_spawn_delay..difficulty.max_rock_spawn_delay)
     state.rock_manager.next_rock_spawn_x = Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X)
-    state.rock_manager.next_rock_dy = Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED)
+    state.rock_manager.next_rock_dy = Numeric.rand(difficulty.min_rock_fall_speed..difficulty.max_rock_fall_speed)
   end
 
   def handle_rock_effect(target_rock)
@@ -328,7 +377,37 @@ class Game
     end
   end
 
-  
+  def calc_current_difficulty_levers
+    elapsed = state.run_started_tick.elapsed_time
+
+    if elapsed < EASY_TO_MEDIUM_DIFFICULTY_DURATION
+      t = elapsed.fdiv(EASY_TO_MEDIUM_DIFFICULTY_DURATION).clamp(0, 1)
+
+      {
+        min_rock_spawn_delay: EASY_MIN_ROCK_SPAWN_DELAY.lerp(MEDIUM_MIN_ROCK_SPAWN_DELAY, t),
+        max_rock_spawn_delay: EASY_MAX_ROCK_SPAWN_DELAY.lerp(MEDIUM_MAX_ROCK_SPAWN_DELAY, t),
+        min_down_rock_spawn_countdown: EASY_MIN_DOWN_ROCK_SPAWN_COUNTDOWN.lerp(MEDIUM_MIN_DOWN_ROCK_SPAWN_COUNTDOWN, t).round,
+        max_down_rock_spawn_countdown: EASY_MAX_DOWN_ROCK_SPAWN_COUNTDOWN.lerp(MEDIUM_MAX_DOWN_ROCK_SPAWN_COUNTDOWN, t).round,
+        min_special_rock_spawn_countdown: EASY_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN.lerp(MEDIUM_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN, t).round,
+        max_special_rock_spawn_countdown: EASY_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN.lerp(MEDIUM_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN, t).round,
+        min_rock_fall_speed: EASY_MIN_ROCK_FALL_SPEED.lerp(MEDIUM_MIN_ROCK_FALL_SPEED, t),
+        max_rock_fall_speed: EASY_MAX_ROCK_FALL_SPEED.lerp(MEDIUM_MAX_ROCK_FALL_SPEED, t),
+      }
+    else
+      t = (elapsed - EASY_TO_MEDIUM_DIFFICULTY_DURATION).fdiv(MEDIUM_TO_HARD_DIFFICULTY_DURATION).clamp(0, 1)
+
+      {
+        min_rock_spawn_delay: MEDIUM_MIN_ROCK_SPAWN_DELAY.lerp(HARD_MIN_ROCK_SPAWN_DELAY, t),
+        max_rock_spawn_delay: MEDIUM_MAX_ROCK_SPAWN_DELAY.lerp(HARD_MAX_ROCK_SPAWN_DELAY, t),
+        min_down_rock_spawn_countdown: MEDIUM_MIN_DOWN_ROCK_SPAWN_COUNTDOWN.lerp(HARD_MIN_DOWN_ROCK_SPAWN_COUNTDOWN, t).round,
+        max_down_rock_spawn_countdown: MEDIUM_MAX_DOWN_ROCK_SPAWN_COUNTDOWN.lerp(HARD_MAX_DOWN_ROCK_SPAWN_COUNTDOWN, t).round,
+        min_special_rock_spawn_countdown: MEDIUM_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN.lerp(HARD_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN, t).round,
+        max_special_rock_spawn_countdown: MEDIUM_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN.lerp(HARD_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN, t).round,
+        min_rock_fall_speed: MEDIUM_MIN_ROCK_FALL_SPEED.lerp(HARD_MIN_ROCK_FALL_SPEED, t),
+        max_rock_fall_speed: MEDIUM_MAX_ROCK_FALL_SPEED.lerp(HARD_MAX_ROCK_FALL_SPEED, t),
+      }
+    end
+  end
 
   def basic_rock(spawn_x:, fall_speed:)
     {

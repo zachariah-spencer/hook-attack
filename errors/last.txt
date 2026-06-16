@@ -1,27 +1,19 @@
 * EXCEPTION:
-* ERROR: :calc_player_offscreen_indicator method missing on ~Game~.
+* ERROR: :rock_spawned_at method missing on ~NilClass~.
 
-#+begin_src ~Game#inspect~
-#<Game:0x20259b929a0 @state={:tick_count=>4622, :input_active=>true, :player=>{:x=>811.1, :y=>470.0, :w=>32, :h=>32, :r=>0, :g=>255, :b=>255, :dx=>0.0, :dy=>-2.5, :face_direction=>1, :move_direction=>0, :acceleration=>0.6, :deceleration=>0.35, :max_speed=>5.0, :attacked_tick=>nil, :grappling_tick=>nil, :grapple_start_x=>910.55}, :hook=>{:x=>1059.883333333334, :y=>414.2999999999984, :w=>16, :h=>16, :r=>255, :g=>0, :b=>0, :a=>100, :direction=>1, :active=>false, :hit_target=>nil}, :rock_manager=>{:rocks=>[{:x=>285, :y=>14.1897265454044, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.306844161312758, :type=>:basic}, {:x=>861, :y=>59.7231284202362, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.412105504752162, :type=>:basic}, {:x=>1144, :y=>202.8431128210706, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.744558597971816, :type=>:basic}, {:x=>499, :y=>87.34067835084648, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>6.590201267178684, :type=>:basic}, {:x=>598, :y=>285.5480783847272, :w=>16, :h=>16, :r=>255, :g=>20, :b=>20, :dy=>5.111199077826738, :type=>:down}, {:x=>960, :y=>253.6978558180162, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.978232617717756, :type=>:basic}, {:x=>194, :y=>356.1700841309882, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.684842435453284, :type=>:basic}, {:x=>516, :y=>386.0089880218756, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>6.422904076502404, :type=>:basic}, {:x=>843, :y=>452.0470266747398, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>6.089840302846822, :type=>:basic}, {:x=>385, :y=>559.3587096668432, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.867917888883482, :type=>:basic}, {:x=>759, :y=>561.2251749916986, :w=>16, :h=>16, :r=>100, :g=>100, :b=>100, :dy=>6.6156177086792, :type=>:bomb}, {:x=>949, :y=>677.077420707694, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.769175476922928, :type=>:basic}, {:x=>836, :y=>696.6536394603674, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.669272107926494, :type=>:basic}, {:x=>690, :y=>714.4085924325996, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>5.591407567400348, :type=>:basic}], :rock_spawned_at=>4620, :next_rock_spawn_delay=>11.32926563460596, :next_rock_spawn_x=>258, :next_rock_dy=>5.17690636221713, :next_special_rock_spawn_countdown=>1}, :player_offscreen_indicator=>{:x=>455.5312499999998, :y=>656, :w=>63.9062500000004, :h=>63.9062500000004, :anchor_x=>0.5, :anchor_y=>0.5, :path=>"sprites/triangle/equilateral/blue.png", :angle=>7.16015625}, :player_attack_input_pressed=>nil, :player_attack_input_released=>nil}, @outputs=#<GTK::TopLevelOutputs:0x20259a86c50>, @inputs=#<GTK::Inputs:0x20259a8bba0>, @args=#<GTK::Args:0x20259a8bc60>>
-#+end_src ~Game#inspect~
+#+begin_src ~NilClass#inspect~
+nil
+#+end_src ~NilClass#inspect~
 
-** Did you mean?
-Here's a list of methods that kind of look like :calc_player_offscreen_indicator.
-*** :calc_player
-*** :calc
-*** :calc_collisions
-*** :calc_hook
-*** :calc_rocks
-*** :player_attacking?
-*** :player_direction?
+
 
 The method named
-  :calc_player_offscreen_indicator
-doesn't exist on [Game, #<Class:#<Game:0x20259b929a0>>, AttrDR].
+  :rock_spawned_at
+doesn't exist on [NilClass, NilClassFalseClass].
 
 (suggestions above)
 ** Backtrace:
-*** app/game.rb:154:in calc_player
-*** app/game.rb:100:in calc
-*** app/game.rb:86:in tick
+*** app/game.rb:310:in calc_rocks
+*** app/game.rb:142:in calc
+*** app/game.rb:126:in tick
 *** app/main.rb:13:in tick
