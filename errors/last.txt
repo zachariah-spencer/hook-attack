@@ -1,22 +1,6 @@
-* EXCEPTION:
-* ERROR: :rock_manager method missing on ~Game~.
-
-#+begin_src ~Game#inspect~
-#<Game:0x1f38f46ef70 @state={:tick_count=>4789, :input_active=>false, :player=>{:x=>646.0, :y=>542.5, :w=>32, :h=>32, :r=>0, :g=>255, :b=>255, :dx=>0.0, :dy=>17.5, :face_direction=>1, :move_direction=>0, :acceleration=>0.6, :deceleration=>0.35, :max_speed=>5.0, :attacked_tick=>nil, :grappling_tick=>4774, :grapple_start_x=>553.3}, :hook=>{:x=>627.9666666666666, :y=>580.0, :w=>32, :h=>32, :r=>255, :g=>0, :b=>0, :a=>100, :direction=>1, :active=>false, :hit_target=>{:x=>646, :y=>549.6433564402742, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.5}}, :rock_manager=>{:rocks=>[{:x=>867, :y=>11637.06476413518, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>-2.5}, {:x=>1059, :y=>123.5574621110156, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.34819896806688}, {:x=>814, :y=>251.8958043125238, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.044123125272832}, {:x=>897, :y=>284.1047466171652, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.065854281435222}, {:x=>67, :y=>10.2538228571084, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>3.79543410236841}, {:x=>429, :y=>122.988796618999, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>3.662645419515354}, {:x=>1097, :y=>90.28608854400958, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>4.734691063578868}, {:x=>1122, :y=>-21.56349644916358, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>6.338149542300532}, {:x=>855, :y=>38.53105695069126, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>6.74721725791395}, {:x=>651, :y=>374.3576271329886, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>3.6770465198618}, {:x=>105, :y=>490.6860894455306, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>2.939921930185502}, {...}, {:x=>1017, :y=>587.6305640273802, :w=>16, :h=>16, :r=>255, :g=>255, :b=>255, :dy=>6.303306474886674}], :rock_spawned_at=>4768, :next_rock_spawn_delay=>24.02124923514698, :next_rock_spawn_x=>125, :next_rock_dy=>5.586511580177236}, :player_attack_input_pressed=>nil, :player_attack_input_released=>nil}, @outputs=#<GTK::TopLevelOutputs:0x1f38f2e6c50>, @inputs=#<GTK::Inputs:0x1f38f2ebba0>, @args=#<GTK::Args:0x1f38f2ebc60>>
-#+end_src ~Game#inspect~
-
-** Did you mean?
-Here's a list of methods that kind of look like :rock_manager.
-*** :rock
-
-The method named
-  :rock_manager
-doesn't exist on [Game, #<Class:#<Game:0x1f38f46ef70>>, AttrDR].
-
-(suggestions above)
+* EXCEPTION: nil is not a symbol nor a string
 ** Backtrace:
-*** app/game.rb:144:in grapple_to_rock
-*** app/game.rb:127:in calc_player
-*** app/game.rb:80:in calc
-*** app/game.rb:66:in tick
+*** app/game.rb:234:in calc_rocks
+*** app/game.rb:90:in calc
+*** app/game.rb:74:in tick
 *** app/main.rb:13:in tick

@@ -1,20 +1,27 @@
 class Game
   attr_dr
 
-  MIN_ROCK_SPAWN_DELAY = 0.1.seconds
-  MAX_ROCK_SPAWN_DELAY = 0.5.seconds
-  MIN_ROCK_FALL_SPEED = 2.0
+  MIN_ROCK_SPAWN_DELAY = 0.05.seconds
+  MAX_ROCK_SPAWN_DELAY = 0.25.seconds
+  MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 2
+  MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 5
+  MIN_ROCK_FALL_SPEED = 4.5
   MAX_ROCK_FALL_SPEED = 7.0
   MIN_ROCK_SPAWN_X = 32
   MAX_ROCK_SPAWN_X = (Grid.w - 32)
-  MAX_HOOK_DURATION = 0.2.seconds
-  MAX_HOOK_LENGTH = 128.0
+  MAX_HOOK_DURATION = 0.4.seconds
+  MAX_HOOK_LENGTH = 256.0
   GRAPPLE_DURATION = 0.25.seconds
   MAX_PLAYER_FALL_SPEED = 2.5
-  PLAYER_FALL_ACCELERATION = 0.4
-  PLAYER_JUMP_VELOCITY = 20.0
+  PLAYER_FALL_ACCELERATION = 0.8
+  PLAYER_FAST_FALL_RECOVERY = 0.33
+  PLAYER_JUMP_VELOCITY = 22.0
+  PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
+  BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
+  SPECIAL_ROCK_TYPES = [:down_rock, :up_rock, :bomb_rock]
 
-  def initialize args; end
+  def initialize args
+  end
 
   def start 
     state.input_active = true
@@ -41,8 +48,8 @@ class Game
     state.hook = {
       x: (state.player.x / 2) - 4,
       y: (state.player.y / 2) - 4,
-      w: 32,
-      h: 32,
+      w: 16,
+      h: 16,
       r: 255,
       g: 0,
       b: 0,
@@ -58,6 +65,7 @@ class Game
       next_rock_spawn_delay: Numeric.rand(MIN_ROCK_SPAWN_DELAY..MAX_ROCK_SPAWN_DELAY),
       next_rock_spawn_x: Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X),
       next_rock_dy: Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED),
+      next_special_rock_spawn_countdown: Numeric.rand(MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN..MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN)
     }
   end
 
@@ -104,7 +112,11 @@ class Game
       state.player.dx = [state.player.dx - state.player.deceleration, target_dx].max
     end
 
-    state.player.dy = [state.player.dy - PLAYER_FALL_ACCELERATION, -MAX_PLAYER_FALL_SPEED].max
+    if state.player.dy < -MAX_PLAYER_FALL_SPEED
+      state.player.dy = [state.player.dy + PLAYER_FAST_FALL_RECOVERY, -MAX_PLAYER_FALL_SPEED].min
+    else
+      state.player.dy = [state.player.dy - PLAYER_FALL_ACCELERATION, -MAX_PLAYER_FALL_SPEED].max
+    end
 
     # calc facing direction
     state.player.face_direction = player_direction?
@@ -140,13 +152,34 @@ class Game
     state.player.x = state.player.grapple_start_x.lerp(target_rock.x, ease_percentage) if target_rock
 
     if state.player.grappling_tick.elapsed_time >= GRAPPLE_DURATION
-      state.player.dy += PLAYER_JUMP_VELOCITY
-      state.rock_manager.rocks.delete(target_rock)
-
-      state.player.grappling_tick = nil
-      state.hook.hit_target = nil
-      enable_input
+      handle_rock_effect(target_rock)
+      reset_grapple_variables
     end
+  end
+
+  def handle_rock_effect(target_rock)
+    case target_rock.type
+    when :basic
+      state.player.dy += PLAYER_JUMP_VELOCITY
+    when :bomb
+      state.player.dy += PLAYER_JUMP_VELOCITY
+      state.rock_manager.rocks.reject! do |other_r|
+        other_r != target_rock && Geometry.distance(target_rock, other_r) <= BOMB_ROCK_EXPLOSION_RADIUS
+      end
+    when :down
+      state.player.dy += -PLAYER_JUMP_VELOCITY / 2
+    when :up
+      state.player.dy += PLAYER_BOOSTED_JUMP_VELOCITY
+    when :default
+      state.player.dy += PLAYER_JUMP_VELOCITY
+    end
+    state.rock_manager.rocks.delete(target_rock)
+  end
+
+  def reset_grapple_variables
+    state.player.grappling_tick = nil
+    state.hook.hit_target = nil
+    enable_input
   end
 
   def calc_hook
@@ -196,11 +229,9 @@ class Game
 
   def calc_rocks
     if state.rock_manager.rock_spawned_at.elapsed_time >= state.rock_manager.next_rock_spawn_delay
-      state.rock_manager.rocks << rock(spawn_x: state.rock_manager.next_rock_spawn_x, fall_speed: state.rock_manager.next_rock_dy)
-      state.rock_manager.rock_spawned_at = Kernel.tick_count
-      state.rock_manager.next_rock_spawn_delay = Numeric.rand(MIN_ROCK_SPAWN_DELAY..MAX_ROCK_SPAWN_DELAY)
-      state.rock_manager.next_rock_spawn_x = Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X)
-      state.rock_manager.next_rock_dy = Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED)
+      selected_rock_type = select_rock_type_to_spawn
+      state.rock_manager.rocks << send(selected_rock_type, spawn_x: state.rock_manager.next_rock_spawn_x, fall_speed: state.rock_manager.next_rock_dy)
+      reset_rock_spawn_variables
     end
 
     state.rock_manager.rocks.each do |r|
@@ -208,6 +239,23 @@ class Game
     end
 
     state.rock_manager.rocks.reject! { |r| r.y < -32 }
+  end
+
+  def select_rock_type_to_spawn
+    if state.rock_manager.next_special_rock_spawn_countdown == 0
+      state.rock_manager.next_special_rock_spawn_countdown = Numeric.rand(MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN..MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN)
+      return SPECIAL_ROCK_TYPES.sample
+    else
+      state.rock_manager.next_special_rock_spawn_countdown -= 1
+      return :basic_rock
+    end
+  end
+
+  def reset_rock_spawn_variables
+    state.rock_manager.rock_spawned_at = Kernel.tick_count
+    state.rock_manager.next_rock_spawn_delay = Numeric.rand(MIN_ROCK_SPAWN_DELAY..MAX_ROCK_SPAWN_DELAY)
+    state.rock_manager.next_rock_spawn_x = Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X)
+    state.rock_manager.next_rock_dy = Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED)
   end
 
   def find_first_rock_hit(hits_array)
@@ -251,7 +299,7 @@ class Game
     state.player.move_direction = 0
   end
 
-  def rock(spawn_x:, fall_speed:)
+  def basic_rock(spawn_x:, fall_speed:)
     {
       x: spawn_x,
       y: 720,
@@ -261,6 +309,49 @@ class Game
       g: 255,
       b: 255,
       dy: fall_speed,
+      type: :basic,
+    }
+  end
+
+  def bomb_rock(spawn_x:, fall_speed:)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 16,
+      h: 16,
+      r: 100,
+      g: 100,
+      b: 100,
+      dy: fall_speed,
+      type: :bomb,
+    }
+  end
+
+  def down_rock(spawn_x:, fall_speed:)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 16,
+      h: 16,
+      r: 255,
+      g: 20,
+      b: 20,
+      dy: fall_speed,
+      type: :down,
+    }
+  end
+
+  def up_rock(spawn_x:, fall_speed:)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 16,
+      h: 16,
+      r: 120,
+      g: 255,
+      b: 255,
+      dy: fall_speed,
+      type: :up,
     }
   end
 end
