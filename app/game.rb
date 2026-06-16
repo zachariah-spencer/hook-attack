@@ -45,6 +45,7 @@ class Game
       grappling_tick: nil,
       grapple_start_x: 0,
     }
+
     state.hook = {
       x: (state.player.x / 2) - 4,
       y: (state.player.y / 2) - 4,
@@ -66,6 +67,17 @@ class Game
       next_rock_spawn_x: Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X),
       next_rock_dy: Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED),
       next_special_rock_spawn_countdown: Numeric.rand(MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN..MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN)
+    }
+
+    state.player_offscreen_indicator = {
+      x: 50,
+      y: Grid.h - 64,
+      w: 64,
+      h: 64,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      path: "sprites/triangle/equilateral/blue.png",
+      angle: 0,
     }
   end
 
@@ -97,9 +109,16 @@ class Game
     outputs.solids << state.hook if player_attacking?
     state.rock_manager.rocks.each { |r| outputs.solids << r }
 
-    outputs.watch "HOOK HITBOX ACTIVE? #{state.hook.active}"
-    outputs.watch "PLAYER_ATTACKING? #{player_attacking?}"
-    outputs.watch "PLAYER_GRAPPLING? #{state.player.grappling_tick}"
+    outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
+  end
+
+  def enable_input
+    state.input_active = true
+  end
+
+  def disable_input
+    state.input_active = false
+    state.player.move_direction = 0
   end
 
   def calc_player
@@ -132,13 +151,52 @@ class Game
     end
     state.player.attacked_tick = nil if state.player.attacked_tick && !player_attacking? || state.player_attack_input_released
 
+    calc_player_offscreen_indicator
+
     # everything after this is handling when a player is mid-grapple after connecting the hook with a rock
     return unless state.player.grappling_tick
-    outputs.watch "GRAPPLING TIME ELAPSED: #{state.player.grappling_tick.elapsed_time}"
-
     grapple_to_rock
-    
+  end
 
+  def calc_player_offscreen_indicator
+    if state.player.y >= Grid.h
+      # x position
+      state.player_offscreen_indicator.x = 
+        state.player.x + state.player.w / 2 - state.player_offscreen_indicator.w / 2
+
+      # angle
+      center_x = state.player_offscreen_indicator.x + state.player_offscreen_indicator.w / 2
+      progress = center_x.fdiv(1280).clamp(0, 1)
+      angle = (30.0).lerp(-30.0, progress)
+      state.player_offscreen_indicator.angle = angle
+
+      # scale
+      distance_above = state.player.y - Grid.h
+      progress = distance_above.fdiv(256).clamp(0, 1)
+      size = 64.lerp(16, progress)
+      state.player_offscreen_indicator.w = size
+      state.player_offscreen_indicator.h = size
+    end
+  end
+
+  def player_direction?
+    if state.player.move_direction > 0
+      1
+    elsif state.player.move_direction < 0
+      -1
+    else
+      state.player.face_direction
+    end
+  end
+
+  def player_attacking?
+    return false if state.player.grappling_tick
+    return false unless state.player.attacked_tick
+    state.player.attacked_tick.elapsed_time <= MAX_HOOK_DURATION
+  end
+
+  def hook_hitbox_active?
+    !state.player.grappling_tick && player_attacking?
   end
 
   def grapple_to_rock
@@ -155,25 +213,6 @@ class Game
       handle_rock_effect(target_rock)
       reset_grapple_variables
     end
-  end
-
-  def handle_rock_effect(target_rock)
-    case target_rock.type
-    when :basic
-      state.player.dy += PLAYER_JUMP_VELOCITY
-    when :bomb
-      state.player.dy += PLAYER_JUMP_VELOCITY
-      state.rock_manager.rocks.reject! do |other_r|
-        other_r != target_rock && Geometry.distance(target_rock, other_r) <= BOMB_ROCK_EXPLOSION_RADIUS
-      end
-    when :down
-      state.player.dy += -PLAYER_JUMP_VELOCITY / 2
-    when :up
-      state.player.dy += PLAYER_BOOSTED_JUMP_VELOCITY
-    when :default
-      state.player.dy += PLAYER_JUMP_VELOCITY
-    end
-    state.rock_manager.rocks.delete(target_rock)
   end
 
   def reset_grapple_variables
@@ -258,6 +297,25 @@ class Game
     state.rock_manager.next_rock_dy = Numeric.rand(MIN_ROCK_FALL_SPEED..MAX_ROCK_FALL_SPEED)
   end
 
+  def handle_rock_effect(target_rock)
+    case target_rock.type
+    when :basic
+      state.player.dy += PLAYER_JUMP_VELOCITY
+    when :bomb
+      state.player.dy += PLAYER_JUMP_VELOCITY
+      state.rock_manager.rocks.reject! do |other_r|
+        other_r != target_rock && Geometry.distance(target_rock, other_r) <= BOMB_ROCK_EXPLOSION_RADIUS
+      end
+    when :down
+      state.player.dy += -PLAYER_JUMP_VELOCITY / 2
+    when :up
+      state.player.dy += PLAYER_BOOSTED_JUMP_VELOCITY
+    when :default
+      state.player.dy += PLAYER_JUMP_VELOCITY
+    end
+    state.rock_manager.rocks.delete(target_rock)
+  end
+
   def find_first_rock_hit(hits_array)
     return nil if hits_array.empty?
 
@@ -270,34 +328,7 @@ class Game
     end
   end
 
-  def player_direction?
-    if state.player.move_direction > 0
-      1
-    elsif state.player.move_direction < 0
-      -1
-    else
-      state.player.face_direction
-    end
-  end
-
-  def player_attacking?
-    return false if state.player.grappling_tick
-    return false unless state.player.attacked_tick
-    state.player.attacked_tick.elapsed_time <= MAX_HOOK_DURATION
-  end
-
-  def hook_hitbox_active?
-    !state.player.grappling_tick && player_attacking?
-  end
-
-  def enable_input
-    state.input_active = true
-  end
-
-  def disable_input
-    state.input_active = false
-    state.player.move_direction = 0
-  end
+  
 
   def basic_rock(spawn_x:, fall_speed:)
     {
