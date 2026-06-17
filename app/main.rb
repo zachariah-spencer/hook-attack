@@ -12,4 +12,8 @@ module Main
     $game.args = args
     $game.tick
   end
+
+  def shutdown
+    $game.shutdown
+  end
 end

@@ -53,6 +53,7 @@ class Game
     state.input_active = true
     state.run_started_tick = nil
     state.run_ended_tick = nil
+    state.longest_run_time = DR.read_file("data/save.txt").to_f || 0.0
 
     state.player = initial_player
 
@@ -112,6 +113,7 @@ class Game
   end
 
   def calc
+    calc_longest_run_time if state.run_started_tick
     calc_player if state.run_started_tick
     calc_hook
     calc_rocks
@@ -127,9 +129,8 @@ class Game
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
 
     outputs.labels << start_instructions_label unless state.run_started_tick
+    outputs.labels << [run_timer_label, longest_run_time_label]
   end
-
-  
 
   def enable_input
     state.input_active = true
@@ -138,6 +139,12 @@ class Game
   def disable_input
     state.input_active = false
     state.player.move_direction = 0
+  end
+
+  def calc_longest_run_time
+    return if (state.run_started_tick.elapsed_time / 60).round(1) <= state.longest_run_time
+    elapsed_seconds = state.run_started_tick.elapsed_time / 60
+    state.longest_run_time = elapsed_seconds.round(1)
   end
 
   def calc_player
@@ -400,6 +407,10 @@ class Game
     state.player = initial_player
   end
 
+  def shutdown
+    DR.write_file "data/save.txt", "#{state.longest_run_time}" if state.longest_run_time
+  end
+
   def initial_player
     {
       x: Grid.w / 2 - 16,
@@ -493,8 +504,33 @@ class Game
   end
 
   def run_timer_label
+    ticks_elapsed = (state.run_started_tick ? state.run_started_tick.elapsed_time : 0)
+    timer_value_seconds = ticks_elapsed / 60
+    
     {
-      
+      x: Grid.w / 2,
+      y: Grid.h - 32,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 64,
+      text: "#{timer_value_seconds.round(1)}",
+      r: 140,
+      g: 255,
+      b: 140,
+    }
+  end
+
+  def longest_run_time_label
+      {
+      x: 32,
+      y: Grid.h - 32,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 32,
+      text: "#{state.longest_run_time}",
+      r: 140,
+      g: 255,
+      b: 140,
     }
   end
 end
