@@ -51,27 +51,10 @@ class Game
 
   def start 
     state.input_active = true
-    state.run_started_tick = Kernel.tick_count
+    state.run_started_tick = nil
+    state.run_ended_tick = nil
 
-    state.player = {
-      x: 50,
-      y: 50,
-      w: 32,
-      h: 32,
-      r: 0,
-      g: 255,
-      b: 255,
-      dx: 0,
-      dy: 0,
-      face_direction: 1,
-      move_direction: 0, 
-      acceleration: 0.6,
-      deceleration: 0.35,
-      max_speed: 5.0,
-      attacked_tick: nil,
-      grappling_tick: nil,
-      grapple_start_x: 0,
-    }
+    state.player = initial_player
 
     state.hook = {
       x: (state.player.x / 2) - 4,
@@ -123,10 +106,13 @@ class Game
     state.player.move_direction += 1 if inputs.keyboard.right
     state.player_attack_input_pressed = inputs.keyboard.key_down.space
     state.player_attack_input_released = inputs.keyboard.key_up.space
+
+    return if state.run_started_tick
+    state.run_started_tick = Kernel.tick_count if state.player.move_direction != 0 || state.player_attack_input_pressed
   end
 
   def calc
-    calc_player
+    calc_player if state.run_started_tick
     calc_hook
     calc_rocks
     calc_collisions
@@ -139,7 +125,11 @@ class Game
     state.rock_manager.rocks.each { |r| outputs.solids << r }
 
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
+
+    outputs.labels << start_instructions_label unless state.run_started_tick
   end
+
+  
 
   def enable_input
     state.input_active = true
@@ -172,6 +162,8 @@ class Game
     # apply velocity
     state.player.x += state.player.dx
     state.player.y += state.player.dy
+
+    calc_end_game if state.player.y <= -state.player.h
 
     # calc attacking
     if state.player_attack_input_pressed && !player_attacking?
@@ -367,7 +359,11 @@ class Game
   end
 
   def calc_current_difficulty_levers
-    elapsed = state.run_started_tick.elapsed_time
+    if state.run_started_tick
+      elapsed = state.run_started_tick.elapsed_time
+    else
+      elapsed = 0.0
+    end
 
     if elapsed < EASY_TO_MEDIUM_DIFFICULTY_DURATION
       t = elapsed.fdiv(EASY_TO_MEDIUM_DIFFICULTY_DURATION).clamp(0, 1)
@@ -396,6 +392,34 @@ class Game
         max_rock_fall_speed: MEDIUM_MAX_ROCK_FALL_SPEED.lerp(HARD_MAX_ROCK_FALL_SPEED, t),
       }
     end
+  end
+
+  def calc_end_game
+    state.run_started_tick = nil
+    state.run_ended_tick = Kernel.tick_count
+    state.player = initial_player
+  end
+
+  def initial_player
+    {
+      x: Grid.w / 2 - 16,
+      y: Grid.h - 64,
+      w: 32,
+      h: 32,
+      r: 0,
+      g: 255,
+      b: 255,
+      dx: 0,
+      dy: 0,
+      face_direction: 1,
+      move_direction: 0, 
+      acceleration: 0.6,
+      deceleration: 0.35,
+      max_speed: 5.0,
+      attacked_tick: nil,
+      grappling_tick: nil,
+      grapple_start_x: 0,
+    }
   end
 
   def basic_rock(spawn_x:, fall_speed:)
@@ -451,6 +475,26 @@ class Game
       b: 255,
       dy: fall_speed,
       type: :up,
+    }
+  end
+
+  def start_instructions_label
+    {
+      x: Grid.w / 2,
+      y: Grid.h / 2,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 96,
+      text: "Press A or D to Play",
+      r: 140,
+      g: 255,
+      b: 140,
+    }
+  end
+
+  def run_timer_label
+    {
+      
     }
   end
 end
