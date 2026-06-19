@@ -12,6 +12,8 @@ class Game
   EASY_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 16
   EASY_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 8
   EASY_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 12
+  EASY_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 14
+  EASY_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 18
   EASY_MIN_ROCK_FALL_SPEED = 3.8
   EASY_MAX_ROCK_FALL_SPEED = 5.3
 
@@ -21,6 +23,8 @@ class Game
   MEDIUM_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 10
   MEDIUM_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 7
   MEDIUM_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 10
+  MEDIUM_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 18
+  MEDIUM_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 20
   MEDIUM_MIN_ROCK_FALL_SPEED = 4.6
   MEDIUM_MAX_ROCK_FALL_SPEED = 6.2
 
@@ -30,6 +34,8 @@ class Game
   HARD_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 7
   HARD_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 6
   HARD_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 9
+  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 1
+  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 2
   HARD_MIN_ROCK_FALL_SPEED = 5.2
   HARD_MAX_ROCK_FALL_SPEED = 7.2
 
@@ -54,6 +60,10 @@ class Game
     state.run_started_tick = nil
     state.run_ended_tick = nil
     state.longest_run_time = DR.read_file("data/save.txt").to_f || 0.0
+    state.paused_tick = nil
+    state.total_time_paused = 0.0
+    state.shop_open_tick = nil
+    state.shop_alpha = 0
 
     state.player = initial_player
 
@@ -98,6 +108,7 @@ class Game
       next_rock_dy: Numeric.rand(difficulty.min_rock_fall_speed..difficulty.max_rock_fall_speed),
       next_special_rock_spawn_countdown: Numeric.rand(difficulty.min_special_rock_spawn_countdown..difficulty.max_special_rock_spawn_countdown),
       next_down_rock_spawn_countdown: Numeric.rand(difficulty.min_down_rock_spawn_countdown..difficulty.max_down_rock_spawn_countdown),
+      next_shop_rock_spawn_countdown: Numeric.rand(HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN..HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN)
     }
 
     state.player_offscreen_indicator = {
@@ -131,12 +142,19 @@ class Game
   end
 
   def calc
-    calc_longest_run_time if state.run_started_tick
-    calc_player if state.run_started_tick
-    calc_hook
-    calc_rocks
-    calc_camera
-    calc_collisions
+    unless state.paused_tick
+      calc_longest_run_time if state.run_started_tick
+      calc_player if state.run_started_tick
+      calc_hook
+      calc_rocks
+      calc_camera
+      calc_collisions
+    else
+      outputs.watch "PAUSED"
+      state.total_time_paused = state.paused_tick.elapsed_time
+      calc_shop if state.shop_open_tick
+      state.paused_tick = nil if inputs.keyboard.key_down.p # debug input
+    end
   end
 
   def render
@@ -155,6 +173,8 @@ class Game
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
     outputs.labels << start_instructions_label unless state.run_started_tick
     outputs.labels << [run_timer_label, longest_run_time_label]
+
+    render_shop if state.shop_open_tick && state.shop_alpha > 0
   end
 
   def enable_input
@@ -189,9 +209,18 @@ class Game
     )
   end
 
+  def calc_shop
+
+  end
+
+  def render_shop
+    outputs.watch "SHOP OPENED"
+  end
+
   def calc_longest_run_time
-    return if (state.run_started_tick.elapsed_time / 60).round(1) <= state.longest_run_time
-    elapsed_seconds = state.run_started_tick.elapsed_time / 60
+    ticks_factoring_pause_elapsed = state.run_started_tick.elapsed_time - state.total_time_paused
+    return if (ticks_factoring_pause_elapsed / 60).round(1) <= state.longest_run_time
+    elapsed_seconds = ticks_factoring_pause_elapsed / 60
     state.longest_run_time = elapsed_seconds.round(1)
   end
 
@@ -409,8 +438,14 @@ class Game
 
   def select_rock_type_to_spawn
     difficulty = calc_current_difficulty_levers
+    state.rock_manager.next_shop_rock_spawn_countdown -= 1
     state.rock_manager.next_special_rock_spawn_countdown -= 1
     state.rock_manager.next_down_rock_spawn_countdown -= 1
+
+    if state.rock_manager.next_shop_rock_spawn_countdown <= 0
+      state.rock_manager.next_shop_rock_spawn_countdown = Numeric.rand(HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN..HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN)
+      return :shop_rock
+    end
 
     if state.rock_manager.next_down_rock_spawn_countdown <= 0
       state.rock_manager.next_down_rock_spawn_countdown = Numeric.rand(difficulty.min_down_rock_spawn_countdown..difficulty.max_down_rock_spawn_countdown)
@@ -450,6 +485,10 @@ class Game
     when :up
       state.player.dy += PLAYER_BOOSTED_JUMP_VELOCITY
       trigger_camera_shake(strength: 50, duration: 20)
+    when :shop
+      open_shop
+      state.player.dy += PLAYER_JUMP_VELOCITY
+      trigger_camera_shake(strength: 12, duration: 30)
     when :default
       state.player.dy += PLAYER_JUMP_VELOCITY
       trigger_camera_shake(strength: 12, duration: 30)
@@ -467,6 +506,11 @@ class Game
       player_edge_x = state.player.x
       hits_array.min_by { |r| player_edge_x - (r.x + r.w)}
     end
+  end
+
+  def open_shop
+    state.paused_tick = Kernel.tick_count
+    state.shop_open_tick = Kernel.tick_count
   end
 
   def calc_current_difficulty_levers
@@ -507,6 +551,7 @@ class Game
 
   def calc_end_game
     state.run_started_tick = nil
+    state.total_time_paused = 0
     state.run_ended_tick = Kernel.tick_count
     state.player = initial_player
   end
@@ -593,6 +638,20 @@ class Game
     }
   end
 
+  def shop_rock(spawn_x:, fall_speed:)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 16,
+      h: 16,
+      r: 120,
+      g: 255,
+      b: 120,
+      dy: fall_speed,
+      type: :shop,
+    }
+  end
+
   def start_instructions_label
     {
       x: Grid.w / 2,
@@ -608,7 +667,8 @@ class Game
   end
 
   def run_timer_label
-    ticks_elapsed = (state.run_started_tick ? state.run_started_tick.elapsed_time : 0)
+    ticks_factoring_pause_elapsed = (state.run_started_tick ? state.run_started_tick.elapsed_time : 0) - state.total_time_paused
+    ticks_elapsed = ticks_factoring_pause_elapsed
     timer_value_seconds = ticks_elapsed / 60
     
     {
