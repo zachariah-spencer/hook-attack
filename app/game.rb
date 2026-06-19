@@ -336,7 +336,6 @@ class Game
     state.player.x = state.player.grapple_start_x.lerp(target_rock.x, ease_percentage) if target_rock
 
     if state.player.grappling_tick.elapsed_time >= GRAPPLE_DURATION
-      trigger_camera_shake(strength: 12, duration: 30)
       handle_rock_effect(target_rock)
       reset_grapple_variables
     end
@@ -438,17 +437,22 @@ class Game
     case target_rock.type
     when :basic
       state.player.dy += PLAYER_JUMP_VELOCITY
+      trigger_camera_shake(strength: 12, duration: 30)
     when :bomb
       state.player.dy += PLAYER_JUMP_VELOCITY
+      trigger_camera_shake(strength: 30, duration: 120)
       state.rock_manager.rocks.reject! do |other_r|
         other_r != target_rock && Geometry.distance(target_rock, other_r) <= BOMB_ROCK_EXPLOSION_RADIUS
       end
     when :down
       state.player.dy += -PLAYER_JUMP_VELOCITY / 2
+      trigger_camera_shake(strength: 50, duration: 20)
     when :up
       state.player.dy += PLAYER_BOOSTED_JUMP_VELOCITY
+      trigger_camera_shake(strength: 50, duration: 20)
     when :default
       state.player.dy += PLAYER_JUMP_VELOCITY
+      trigger_camera_shake(strength: 12, duration: 30)
     end
     state.rock_manager.rocks.delete(target_rock)
   end
