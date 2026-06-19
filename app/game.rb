@@ -63,6 +63,7 @@ class Game
     state.paused_tick = nil
     state.total_time_paused = 0.0
     state.shop_open_tick = nil
+    state.shop_close_tick = nil
     state.shop_alpha = 0
 
     state.player = initial_player
@@ -153,7 +154,6 @@ class Game
       outputs.watch "PAUSED"
       state.total_time_paused = state.paused_tick.elapsed_time
       calc_shop if state.shop_open_tick
-      state.paused_tick = nil if inputs.keyboard.key_down.p # debug input
     end
   end
 
@@ -210,10 +210,40 @@ class Game
   end
 
   def calc_shop
+    if !state.shop_close_tick && state.shop_alpha < 255
+      ease_percentage = Easing.smooth_stop(start_at: state.shop_open_tick,
+                                duration: 0.5.seconds,
+                                tick_count: Kernel.tick_count,
+                                power: 1)
+      state.shop_alpha = state.shop_alpha.lerp(255, ease_percentage)
+    elsif state.shop_close_tick && state.shop_close_tick.elapsed_time < 0.5.seconds
+      ease_percentage = Easing.smooth_stop(start_at: state.shop_close_tick,
+                                duration: 0.5.seconds,
+                                tick_count: Kernel.tick_count,
+                                power: 1)
+      state.shop_alpha = state.shop_alpha.lerp(0, ease_percentage)
+    elsif state.shop_close_tick && state.shop_close_tick.elapsed_time >= 0.5.seconds
+      state.shop_open_tick = nil
+      state.shop_close_tick = nil
+      state.paused_tick = nil
+    end
 
+    state.shop_close_tick = Kernel.tick_count if inputs.keyboard.key_down.m # debug input
   end
 
   def render_shop
+    outputs.labels << {
+      x: Grid.w / 2,
+      y: Grid.h - 128,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 64,
+      text: "The Rock Shoppe",
+      r: 220,
+      g: 220,
+      b: 220,
+      a: state.shop_alpha
+    }
     outputs.watch "SHOP OPENED"
   end
 
