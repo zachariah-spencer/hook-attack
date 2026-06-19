@@ -43,8 +43,8 @@ class Game
   MAX_ROCK_SPAWN_X = (Grid.w - 32)
   MIN_GOLD_SPAWN_DELAY = 0.75.seconds
   MAX_GOLD_SPAWN_DELAY = 1.5.seconds
-  GOLD_ATTRACTION_RADIUS = 256
-  GOLD_ATTRACTION_STRENGTH = 3.0
+  GOLD_ATTRACTION_RADIUS = 350
+  GOLD_ATTRACTION_STRENGTH = 10.0
   MAX_HOOK_DURATION = 0.4.seconds
   MAX_HOOK_LENGTH = 256.0
   GRAPPLE_DURATION = 0.25.seconds
@@ -505,7 +505,7 @@ class Game
 
       g.y -= g.dy
 
-      next if distance.zero? || distance >= GOLD_ATTRACTION_RADIUS
+      next if distance.zero? || distance >= GOLD_ATTRACTION_RADIUS || !state.run_started_tick
 
       proximity = 1.0 - distance / GOLD_ATTRACTION_RADIUS
       pull = GOLD_ATTRACTION_STRENGTH * proximity**2

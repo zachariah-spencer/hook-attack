@@ -1,7 +1,37 @@
-* EXCEPTION: wrong number of arguments (given 0, expected 1)
+* EXCEPTION:
+* ERROR: :trigger_camera_zoom method missing on ~Hash~.
+
+#+begin_src ~Hash#inspect~
+{:x=>640.0, :y=>360.0, :screen_x=>640, :screen_y=>360, :zoom=>1.0, :zoom_start=>1.0, :zoom_target=>1.05, :zoom_started_tick=>nil, :zoom_in_duration=>15.0, :zoom_out_duration=>20, :shake_x=>0, :shake_y=>0, :shake_time=>0.0, :shake_duration=>30, :shake_strength=>12}
+#+end_src ~Hash#inspect~
+
+** Did you mean?
+Here's a list of methods that kind of look like :trigger_camera_zoom.
+*** :camera
+*** :camera=
+*** :zoom
+*** :zoom=
+*** :zoom_in_duration
+*** :zoom_in_duration=
+*** :zoom_out_duration
+*** :zoom_out_duration=
+*** :zoom_start
+*** :zoom_start=
+*** :zoom_started_tick
+*** :zoom_started_tick=
+*** :zoom_target
+*** :zoom_target=
+
+The method named
+  :trigger_camera_zoom
+with args
+  [{:target=>1.025, :zoom_in_duration=>5, :zoom_out_duration=>5}]
+doesn't exist on [Hash, #<Class:#<Hash:0x1ef2596a080>>, Enumerable].
+
+(suggestions above)
 ** Backtrace:
-*** app/game.rb:504:in calc_gold
-*** app/game.rb:496:in calc_gold
-*** app/game.rb:164:in calc
+*** app/game.rb:454:in calc_collisions
+*** app/game.rb:450:in calc_collisions
+*** app/game.rb:166:in calc
 *** app/game.rb:142:in tick
 *** app/main.rb:13:in tick
