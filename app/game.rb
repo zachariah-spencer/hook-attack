@@ -34,13 +34,17 @@ class Game
   HARD_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 7
   HARD_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 6
   HARD_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 9
-  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 1
-  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 2
+  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 50
+  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 60
   HARD_MIN_ROCK_FALL_SPEED = 5.2
   HARD_MAX_ROCK_FALL_SPEED = 7.2
 
   MIN_ROCK_SPAWN_X = 32
   MAX_ROCK_SPAWN_X = (Grid.w - 32)
+  MIN_GOLD_SPAWN_DELAY = 0.75.seconds
+  MAX_GOLD_SPAWN_DELAY = 1.5.seconds
+  GOLD_ATTRACTION_RADIUS = 256
+  GOLD_ATTRACTION_STRENGTH = 3.0
   MAX_HOOK_DURATION = 0.4.seconds
   MAX_HOOK_LENGTH = 256.0
   GRAPPLE_DURATION = 0.25.seconds
@@ -50,7 +54,7 @@ class Game
   PLAYER_JUMP_VELOCITY = 22.0
   PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
-  SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock]
+  SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock, :gold_rock]
 
   def initialize args
   end
@@ -65,7 +69,6 @@ class Game
     state.shop_open_tick = nil
     state.shop_close_tick = nil
     state.shop_alpha = 0
-
     state.player = initial_player
 
     state.camera = {
@@ -112,6 +115,16 @@ class Game
       next_shop_rock_spawn_countdown: Numeric.rand(HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN..HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN)
     }
 
+    
+
+    state.gold_manager = {
+      gold: [],
+      gold_spawn_tick: 0,
+      next_gold_spawn_delay: Numeric.rand(MIN_GOLD_SPAWN_DELAY..MAX_GOLD_SPAWN_DELAY),
+      next_gold_spawn_x: Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X),
+      next_gold_dy: Numeric.rand(EASY_MIN_ROCK_FALL_SPEED..EASY_MAX_ROCK_FALL_SPEED),
+    }
+
     state.player_offscreen_indicator = {
       x: 50,
       y: Grid.h - 64,
@@ -148,8 +161,9 @@ class Game
       calc_player if state.run_started_tick
       calc_hook
       calc_rocks
+      calc_gold
       calc_camera
-      calc_collisions
+      calc_collisions if state.run_started_tick
     else
       outputs.watch "PAUSED"
       state.total_time_paused = state.paused_tick.elapsed_time
@@ -167,13 +181,13 @@ class Game
     outputs.solids << camera_transform(state.player)
     outputs.solids << camera_transform(state.hook) if player_attacking?
     state.rock_manager.rocks.each { |r| outputs.solids << camera_transform(r) }
+    state.gold_manager.gold.each { |g| outputs.solids << camera_transform(g) }
   end
 
   def render_ui
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
     outputs.labels << start_instructions_label unless state.run_started_tick
-    outputs.labels << [run_timer_label, longest_run_time_label]
-
+    outputs.labels << [run_timer_label, longest_run_time_label, gold_label]
     render_shop if state.shop_open_tick && state.shop_alpha > 0
   end
 
@@ -433,6 +447,13 @@ class Game
     state.player.x = Grid.w - state.player.w if state.player.x >= Grid.w - state.player.w
     state.player.y = Grid.h if state.player.y <= (0 - state.player.h)
 
+    state.gold_manager.gold.each do |g|
+      if state.player.intersect_rect?(g)
+        state.gold_manager.gold.delete(g)
+        state.player.gold += 1
+      end
+    end
+
     state.hook.b = state.hook.active ? 255 : 0
 
     # everything below this handles hook collisions if the hitbox for it is active
@@ -464,6 +485,43 @@ class Game
     end
 
     state.rock_manager.rocks.reject! { |r| r.y < -32 }
+  end
+
+  def calc_gold
+    if state.gold_manager.gold_spawn_tick.elapsed_time >= state.gold_manager.next_gold_spawn_delay
+      state.gold_manager.gold << gold(spawn_x: state.gold_manager.next_gold_spawn_x, fall_speed: state.gold_manager.next_gold_dy)
+      reset_gold_spawn_variables
+    end
+
+    state.gold_manager.gold.each do |g|
+      player_x = state.player.x + state.player.w / 2
+      player_y = state.player.y + state.player.h / 2
+      gold_x = g.x + g.w / 2
+      gold_y = g.y + g.h / 2
+
+      offset_x = player_x - gold_x
+      offset_y = player_y - gold_y
+      distance = Math.sqrt(offset_x**2 +offset_y**2)
+
+      g.y -= g.dy
+
+      next if distance.zero? || distance >= GOLD_ATTRACTION_RADIUS
+
+      proximity = 1.0 - distance / GOLD_ATTRACTION_RADIUS
+      pull = GOLD_ATTRACTION_STRENGTH * proximity**2
+
+      g.x += offset_x / distance * pull
+      g.y += offset_y / distance * pull
+    end
+
+    state.gold_manager.gold.reject! { |g| g.y < -16 }
+  end
+
+  def reset_gold_spawn_variables
+    state.gold_manager.gold_spawn_tick = Kernel.tick_count
+    state.gold_manager.next_gold_spawn_delay = Numeric.rand(MIN_GOLD_SPAWN_DELAY..MAX_GOLD_SPAWN_DELAY)
+    state.gold_manager.next_gold_spawn_x = Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X)
+    state.gold_manager.next_gold_dy = Numeric.rand(EASY_MIN_ROCK_FALL_SPEED..EASY_MAX_ROCK_FALL_SPEED)
   end
 
   def select_rock_type_to_spawn
@@ -519,6 +577,10 @@ class Game
       open_shop
       state.player.dy += PLAYER_JUMP_VELOCITY
       trigger_camera_shake(strength: 12, duration: 30)
+    when :gold
+      state.player.dy += PLAYER_JUMP_VELOCITY
+      trigger_camera_shake(strength: 12, duration: 30)
+      state.player.gold += 5
     when :default
       state.player.dy += PLAYER_JUMP_VELOCITY
       trigger_camera_shake(strength: 12, duration: 30)
@@ -580,6 +642,8 @@ class Game
   end
 
   def calc_end_game
+    enable_input
+    state.hook.hit_target = nil
     state.run_started_tick = nil
     state.total_time_paused = 0
     state.run_ended_tick = Kernel.tick_count
@@ -609,6 +673,7 @@ class Game
       attacked_tick: nil,
       grappling_tick: nil,
       grapple_start_x: 0,
+      gold: 0,
     }
   end
 
@@ -668,6 +733,20 @@ class Game
     }
   end
 
+  def gold_rock(spawn_x:, fall_speed:)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 16,
+      h: 16,
+      r: 230,
+      g: 230,
+      b: 80,
+      dy: fall_speed,
+      type: :gold,
+    }
+  end
+
   def shop_rock(spawn_x:, fall_speed:)
     {
       x: spawn_x,
@@ -679,6 +758,20 @@ class Game
       b: 120,
       dy: fall_speed,
       type: :shop,
+    }
+  end
+
+  def gold(spawn_x:, fall_speed:)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 8,
+      h: 8,
+      r: 255,
+      g: 255,
+      b: 80,
+      dy: fall_speed * 1.5,
+      type: :shop
     }
   end
 
@@ -725,6 +818,20 @@ class Game
       r: 140,
       g: 255,
       b: 140,
+    }
+  end
+
+  def gold_label
+      {
+      x: Grid.w - 32,
+      y: Grid.h - 32,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 32,
+      text: "#{state.player.gold}",
+      r: 255,
+      g: 255,
+      b: 100,
     }
   end
 end
