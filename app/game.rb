@@ -57,6 +57,24 @@ class Game
 
     state.player = initial_player
 
+    state.camera = {
+      x: 640.0,
+      y: 360.0,
+      screen_x: 640,
+      screen_y: 360,
+      zoom: 1.0,
+      zoom_start: 1.0,
+      zoom_target: 1.0,
+      zoom_started_tick: nil,
+      zoom_in_duration: 0,
+      zoom_out_duration: 0,
+      shake_x: 0.0,
+      shake_y: 0.0,
+      shake_time: 0.0,
+      shake_duration: 1,
+      shake_strength: 0,
+    }
+
     state.hook = {
       x: (state.player.x / 2) - 4,
       y: (state.player.y / 2) - 4,
@@ -117,17 +135,24 @@ class Game
     calc_player if state.run_started_tick
     calc_hook
     calc_rocks
+    calc_camera
     calc_collisions
   end
 
   def render
     outputs.background_color = [40,40,40]
-    outputs.solids << state.player
-    outputs.solids << state.hook if player_attacking?
-    state.rock_manager.rocks.each { |r| outputs.solids << r }
+    render_world
+    render_ui
+  end
 
+  def render_world
+    outputs.solids << camera_transform(state.player)
+    outputs.solids << camera_transform(state.hook) if player_attacking?
+    state.rock_manager.rocks.each { |r| outputs.solids << camera_transform(r) }
+  end
+
+  def render_ui
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
-
     outputs.labels << start_instructions_label unless state.run_started_tick
     outputs.labels << [run_timer_label, longest_run_time_label]
   end
@@ -141,10 +166,83 @@ class Game
     state.player.move_direction = 0
   end
 
+  def trigger_camera_shake(strength:, duration:)
+    state.camera.shake_strength = strength
+    state.camera.shake_duration = duration
+    state.camera.shake_time = duration
+  end
+
+  def camera_transform(rect)
+    camera = state.camera
+    zoom = camera.zoom || 1.0
+
+    world_center_x = rect.x + rect.w / 2
+    world_center_y = rect.y + rect.h / 2
+
+    screen_center_x = (world_center_x - camera.x) * zoom + camera.screen_x + camera.shake_x
+    screen_center_y = (world_center_y - camera.y) * zoom + camera.screen_y + camera.shake_y
+    rect.merge(
+      x: screen_center_x - rect.w * zoom / 2,
+      y: screen_center_y - rect.h * zoom / 2,
+      w: rect.w * zoom,
+      h: rect.h * zoom,
+    )
+  end
+
   def calc_longest_run_time
     return if (state.run_started_tick.elapsed_time / 60).round(1) <= state.longest_run_time
     elapsed_seconds = state.run_started_tick.elapsed_time / 60
     state.longest_run_time = elapsed_seconds.round(1)
+  end
+
+  def calc_camera
+    calc_camera_shake
+    calc_camera_zoom
+  end
+
+  def calc_camera_shake
+    if state.camera.shake_time > 0.0
+      current_strength = state.camera.shake_strength * state.camera.shake_time / state.camera.shake_duration
+      angle = Numeric.rand * Math::PI * 2
+      distance = Numeric.rand * current_strength
+
+      state.camera.shake_x = Math.sin(angle) * distance
+      state.camera.shake_y = Math.cos(angle) * distance
+
+      state.camera.shake_time -= 1.0
+    else
+      state.camera.shake_x = 0
+      state.camera.shake_y = 0
+    end
+  end
+
+  def calc_camera_zoom
+    return unless state.camera.zoom_started_tick
+    elapsed = state.camera.zoom_started_tick.elapsed_time
+
+    zoom_in_end_tick = state.camera.zoom_in_duration
+    zoom_out_end_tick = zoom_in_end_tick + state.camera.zoom_out_duration
+
+    if elapsed < zoom_in_end_tick
+      progress = elapsed.fdiv(state.camera.zoom_in_duration)
+      state.camera.zoom = state.camera.zoom_start.lerp(state.camera.zoom_target, progress)
+    elsif elapsed < zoom_out_end_tick
+      zoom_out_elapsed = elapsed - zoom_in_end_tick
+      progress = zoom_out_elapsed.fdiv(state.camera.zoom_out_duration)
+      state.camera.zoom = state.camera.zoom_target.lerp(1.0, progress)
+    else
+      state.camera.zoom = 1.0
+      state.camera.zoom_started_tick = nil
+    end
+  end
+
+  def trigger_camera_zoom(target:, zoom_in_duration:, zoom_out_duration:)
+    state.camera.zoom_start = state.camera.zoom
+    state.camera.zoom_target = target
+    state.camera.zoom_started_tick = Kernel.tick_count
+    state.camera.zoom_in_duration = zoom_in_duration
+    state.camera.zoom_out_duration = zoom_out_duration
+
   end
 
   def calc_player
@@ -238,6 +336,7 @@ class Game
     state.player.x = state.player.grapple_start_x.lerp(target_rock.x, ease_percentage) if target_rock
 
     if state.player.grappling_tick.elapsed_time >= GRAPPLE_DURATION
+      trigger_camera_shake(strength: 12, duration: 30)
       handle_rock_effect(target_rock)
       reset_grapple_variables
     end
@@ -291,6 +390,7 @@ class Game
       disable_input
       state.player.grappling_tick = Kernel.tick_count
       state.player.grapple_start_x = state.player.x
+      trigger_camera_zoom(target: 1.05, zoom_in_duration: GRAPPLE_DURATION, zoom_out_duration: 20)
     end
   end
 
