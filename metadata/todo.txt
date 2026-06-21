@@ -2,7 +2,7 @@ Powerups
     Wide Hook %%%
     Eagle (Life Save)?
     Boost(Up) Rock Spam %%%
-    2x Money
+    Gold Rush (2x Money) %%%
 
 
 Powerup Shop from rock shop 

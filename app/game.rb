@@ -56,11 +56,11 @@ class Game
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
   DEFAULT_HOOK_SIZE = 16
   WIDE_HOOK_SIZE = 64
-  MIN_POWERUP_SPAWN_DELAY = 5.seconds
-  MAX_POWERUP_SPAWN_DELAY = 10.seconds
+  MIN_POWERUP_SPAWN_DELAY = 20.seconds
+  MAX_POWERUP_SPAWN_DELAY = 35.seconds
   POWERUP_FALL_SPEED = 4.5
   SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock, :gold_rock]
-  POWERUP_TYPES = [:up_rock, :wide_hook, :gold_rush]
+  POWERUP_TYPES = [:up_rock, :wide_hook, :gold_rush, :eagle]
 
   def initialize args
   end
@@ -146,9 +146,12 @@ class Game
   def input
     return unless state.input_active
     state.player.move_direction = 0
+    state.player.move_direction_y = 0
     state.player.move_direction -= 1 if inputs.keyboard.left
     state.player.move_direction += 1 if inputs.keyboard.right
-    state.player.move_down = inputs.keyboard.down
+    state.player.move_direction_y -= 1 if inputs.keyboard.down
+    state.player.move_direction_y += 1 if inputs.keyboard.up && state.player.carried_by_eagle
+    # state.player.move_down = inputs.keyboard.down
     state.player_attack_input_pressed = inputs.keyboard.key_down.space
     state.player_attack_input_released = inputs.keyboard.key_up.space
 
@@ -355,22 +358,38 @@ class Game
   end
 
   def calc_player
-    # calc velocity
-    target_dx = state.player.move_direction * state.player.max_speed
+    unless state.player.carried_by_eagle
+      # calc velocity
+      target_dx = state.player.move_direction * state.player.max_speed
+      
 
-    if state.player.dx < target_dx
-      state.player.dx = [state.player.dx + state.player.acceleration, target_dx].min
-    elsif state.player.dx > target_dx
-      state.player.dx = [state.player.dx - state.player.deceleration, target_dx].max
-    end
+      if state.player.dx < target_dx
+        state.player.dx = [state.player.dx + state.player.acceleration, target_dx].min
+      elsif state.player.dx > target_dx
+        state.player.dx = [state.player.dx - state.player.deceleration, target_dx].max
+      end
 
-    applied_player_fall_speed = state.player.move_down ? (MAX_PLAYER_FALL_SPEED * 1.5) : MAX_PLAYER_FALL_SPEED
-    if state.player.dy < -MAX_PLAYER_FALL_SPEED
-      state.player.dy = [state.player.dy + PLAYER_FAST_FALL_RECOVERY, -applied_player_fall_speed].min
+      applied_player_fall_speed = state.player.move_direction_y == -1 ? (MAX_PLAYER_FALL_SPEED * 1.5) : MAX_PLAYER_FALL_SPEED
+      if state.player.dy < -MAX_PLAYER_FALL_SPEED
+        state.player.dy = [state.player.dy + PLAYER_FAST_FALL_RECOVERY, -applied_player_fall_speed].min
+      else
+        state.player.dy = [state.player.dy - PLAYER_FALL_ACCELERATION, -applied_player_fall_speed].max
+      end
     else
-      state.player.dy = [state.player.dy - PLAYER_FALL_ACCELERATION, -applied_player_fall_speed].max
-    end
+      eagle_speed = state.player.max_speed * 1.75
 
+      if state.player.dx < state.player.move_direction * eagle_speed
+        state.player.dx = [state.player.dx + (state.player.acceleration * 1.5), state.player.move_direction * eagle_speed].min
+      elsif state.player.dx > state.player.move_direction * eagle_speed
+        state.player.dx = [state.player.dx - (state.player.deceleration * 1.5), state.player.move_direction * eagle_speed].max
+      end
+
+      if state.player.dy < state.player.move_direction_y * eagle_speed
+        state.player.dy = [state.player.dy + (state.player.acceleration * 1.5), state.player.move_direction_y * eagle_speed].min
+      elsif state.player.dy > state.player.move_direction_y * eagle_speed
+        state.player.dy = [state.player.dy - (state.player.deceleration * 1.5), state.player.move_direction_y * eagle_speed].max
+      end
+    end
     # calc facing direction
     state.player.face_direction = player_direction?
 
@@ -408,7 +427,7 @@ class Game
 
       # scale
       distance_above = state.player.y - Grid.h
-      progress = distance_above.fdiv(256).clamp(0, 1)
+      progress = distance_above.fdiv(1024).clamp(0, 1)
       size = 64.lerp(16, progress)
       state.player_offscreen_indicator.w = size
       state.player_offscreen_indicator.h = size
@@ -499,6 +518,16 @@ class Game
     end
 
     state.hook.b = state.hook.active ? 255 : 0
+
+    if state.player.carried_by_eagle
+      rocks_hit = state.rock_manager.rocks.select do |rock|
+        state.player.intersect_rect?(rock)
+      end
+
+      rocks_hit.each do |rock|
+        handle_rock_effect(rock)
+      end
+    end
 
     # everything below this handles hook collisions if the hitbox for it is active
     return unless state.hook.active
@@ -624,6 +653,8 @@ class Game
           state.rock_manager.only_spawn_up_rocks = true
         when :gold_rush
           state.gold_modifier = 2.0
+        when :eagle
+          state.player.carried_by_eagle = true
         end
       else
         if remaining_powerup_time(p) <= 0
@@ -634,6 +665,8 @@ class Game
             state.rock_manager.only_spawn_up_rocks = false
           when :gold_rush
             state.gold_modifier = 1.0
+          when :eagle
+            state.player.carried_by_eagle = false
           end
           state.player.powerups.delete(p)
         end
@@ -778,7 +811,8 @@ class Game
       grappling_tick: nil,
       grapple_start_x: 0,
       gold: 0,
-      powerups: []
+      powerups: [],
+      carried_by_eagle: false,
     }
   end
 
@@ -1001,6 +1035,23 @@ class Game
       start_tick: Kernel.tick_count,
       type: :gold_rush,
       duration: 15.seconds,
+      active: false,
+    }
+  end
+
+  def eagle_powerup(spawn_x: 0)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 32,
+      h: 32,
+      r: 255,
+      g: 105,
+      b: 180,
+      name: "Eagle",
+      start_tick: Kernel.tick_count,
+      type: :eagle,
+      duration: 10.seconds,
       active: false,
     }
   end
