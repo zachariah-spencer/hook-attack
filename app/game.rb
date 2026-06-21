@@ -60,7 +60,7 @@ class Game
   MAX_POWERUP_SPAWN_DELAY = 10.seconds
   POWERUP_FALL_SPEED = 4.5
   SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock, :gold_rock]
-  POWERUP_TYPES = [:up_rock, :wide_hook]
+  POWERUP_TYPES = [:up_rock, :wide_hook, :gold_rush]
 
   def initialize args
   end
@@ -76,6 +76,7 @@ class Game
     state.shop_close_tick = nil
     state.shop_alpha = 0
     state.player = initial_player
+    state.gold_modifier = 1.0
 
     state.camera = {
       x: 640.0,
@@ -364,7 +365,6 @@ class Game
     end
 
     applied_player_fall_speed = state.player.move_down ? (MAX_PLAYER_FALL_SPEED * 1.5) : MAX_PLAYER_FALL_SPEED
-    outputs.watch "#{applied_player_fall_speed}"
     if state.player.dy < -MAX_PLAYER_FALL_SPEED
       state.player.dy = [state.player.dy + PLAYER_FAST_FALL_RECOVERY, -applied_player_fall_speed].min
     else
@@ -487,7 +487,7 @@ class Game
     state.gold_manager.gold.each do |g|
       if state.player.intersect_rect?(g)
         state.gold_manager.gold.delete(g)
-        state.player.gold += 1
+        state.player.gold += 1 * state.gold_modifier
       end
     end
 
@@ -622,6 +622,8 @@ class Game
           state.hook.h = WIDE_HOOK_SIZE
         when :up_rock
           state.rock_manager.only_spawn_up_rocks = true
+        when :gold_rush
+          state.gold_modifier = 2.0
         end
       else
         if remaining_powerup_time(p) <= 0
@@ -630,6 +632,8 @@ class Game
             state.hook.h = DEFAULT_HOOK_SIZE
           when :up_rock
             state.rock_manager.only_spawn_up_rocks = false
+          when :gold_rush
+            state.gold_modifier = 1.0
           end
           state.player.powerups.delete(p)
         end
@@ -663,7 +667,7 @@ class Game
     when :gold
       state.player.dy += PLAYER_JUMP_VELOCITY
       trigger_camera_shake(strength: 12, duration: 30)
-      state.player.gold += 5
+      state.player.gold += 5 * state.gold_modifier
     when :default
       state.player.dy += PLAYER_JUMP_VELOCITY
       trigger_camera_shake(strength: 12, duration: 30)
@@ -929,7 +933,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 32,
-      text: "#{state.player.gold}",
+      text: "#{state.player.gold.round(0)}",
       r: 255,
       g: 255,
       b: 100,
@@ -962,7 +966,7 @@ class Game
       name: "Wide Hook",
       start_tick: Kernel.tick_count,
       type: :wide_hook,
-      duration: 5.0.seconds,
+      duration: 10.0.seconds,
       active: false,
     }
   end
@@ -979,7 +983,24 @@ class Game
       name: "Boost Rock Avalanche",
       start_tick: Kernel.tick_count,
       type: :up_rock,
-      duration: 7.5.seconds,
+      duration: 10.0.seconds,
+      active: false,
+    }
+  end
+
+  def gold_rush_powerup(spawn_x: 0)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 32,
+      h: 32,
+      r: 255,
+      g: 255,
+      b: 0,
+      name: "Gold Rush!(2x $)",
+      start_tick: Kernel.tick_count,
+      type: :gold_rush,
+      duration: 15.seconds,
       active: false,
     }
   end
