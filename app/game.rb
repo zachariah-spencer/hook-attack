@@ -53,10 +53,12 @@ class Game
   PLAYER_FAST_FALL_RECOVERY = 0.33
   PLAYER_JUMP_VELOCITY = 22.0
   PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
-  POWERUP_DURATION = 5.0.seconds
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
   DEFAULT_HOOK_SIZE = 16
   WIDE_HOOK_SIZE = 64
+  MIN_POWERUP_SPAWN_DELAY = 5.seconds
+  MAX_POWERUP_SPAWN_DELAY = 10.seconds
+  POWERUP_FALL_SPEED = 4.5
   SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock, :gold_rock]
 
   def initialize args
@@ -105,7 +107,12 @@ class Game
       next_shop_rock_spawn_countdown: Numeric.rand(HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN..HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN)
     }
 
-    
+    state.powerup_manager = {
+      powerups: [],
+      powerup_spawn_tick: 0,
+      next_powerup_spawn_delay: Numeric.rand(MIN_POWERUP_SPAWN_DELAY..MAX_POWERUP_SPAWN_DELAY),
+      next_powerup_spawn_x: Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X),
+    }
 
     state.gold_manager = {
       gold: [],
@@ -149,7 +156,7 @@ class Game
     unless state.paused_tick
       calc_longest_run_time if state.run_started_tick
       calc_player if state.run_started_tick
-      calc_powerups if state.run_started_tick
+      calc_powerups
       calc_hook
       calc_rocks
       calc_gold
@@ -173,6 +180,7 @@ class Game
     outputs.solids << camera_transform(state.hook) if player_attacking?
     state.rock_manager.rocks.each { |r| outputs.solids << camera_transform(r) }
     state.gold_manager.gold.each { |g| outputs.solids << camera_transform(g) }
+    state.powerup_manager.powerups.each { |p| outputs.solids << camera_transform(p) }
   end
 
   def render_ui
@@ -478,6 +486,13 @@ class Game
       end
     end
 
+    state.powerup_manager.powerups.each do |p|
+      if state.player.intersect_rect?(p)
+        state.powerup_manager.powerups.delete(p)
+        add_powerup(powerup_method_name: "#{p.type}_powerup")
+      end
+    end
+
     state.hook.b = state.hook.active ? 255 : 0
 
     # everything below this handles hook collisions if the hitbox for it is active
@@ -581,7 +596,15 @@ class Game
   end
 
   def calc_powerups
-    add_powerup(powerup_method_name: :wide_hook_powerup) if inputs.keyboard.key_down.i if state.run_started_tick
+    if state.powerup_manager.powerup_spawn_tick.elapsed_time >= state.powerup_manager.next_powerup_spawn_delay
+      state.powerup_manager.powerups << wide_hook_powerup(spawn_x: state.powerup_manager.next_powerup_spawn_x)
+      state.powerup_manager.powerup_spawn_tick = Kernel.tick_count
+      state.powerup_manager.next_powerup_spawn_delay = Numeric.rand(MIN_POWERUP_SPAWN_DELAY..MAX_POWERUP_SPAWN_DELAY)
+      state.powerup_manager.next_powerup_spawn_x = Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X)
+    end
+
+    state.powerup_manager.powerups.each { |p| p.y -= POWERUP_FALL_SPEED }
+    state.powerup_manager.powerups.reject! { |p| p.y <= 0 - p.h }
 
     state.player.powerups.each do |p|
       unless p.active
@@ -915,8 +938,15 @@ class Game
     }
   end
 
-  def wide_hook_powerup
+  def wide_hook_powerup(spawn_x: 0)
     {
+      x: spawn_x,
+      y: 720,
+      w: 32,
+      h: 32,
+      r: 255,
+      g: 0,
+      b: 255,
       name: "Wide Hook",
       start_tick: Kernel.tick_count,
       type: :wide_hook,
