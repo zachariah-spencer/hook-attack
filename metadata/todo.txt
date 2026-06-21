@@ -1,7 +1,7 @@
 Powerups
-    Wide Hook ^
+    Wide Hook %%%
     Eagle (Life Save)?
-    Boost(Up) Rock Spam
+    Boost(Up) Rock Spam %%%
     2x Money
 
 
