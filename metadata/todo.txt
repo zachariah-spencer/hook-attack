@@ -1,4 +1,7 @@
 Powerups
+    Wide Hook ^
+    Eagle (Life Save)?
+
 Powerup Shop from rock shop 
 Combos Notifications (Maybe separate score from time that is multiplied by time in some way)
 Better Title Screen
