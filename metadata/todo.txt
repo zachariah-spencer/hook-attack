@@ -1,7 +1,7 @@
 Powerups
     Wide Hook %%%
-    Eagle (Life Save)?
-    Boost(Up) Rock Spam %%%
+    Eagle (Free Fly) %%%
+    Boost(Up Rock Spam) %%%
     Gold Rush (2x Money) %%%
 
 

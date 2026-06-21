@@ -12,8 +12,8 @@ class Game
   EASY_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 16
   EASY_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 8
   EASY_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 12
-  EASY_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 14
-  EASY_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 18
+  EASY_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 1# 14
+  EASY_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 2# 18
   EASY_MIN_ROCK_FALL_SPEED = 3.8
   EASY_MAX_ROCK_FALL_SPEED = 5.3
 
@@ -23,8 +23,8 @@ class Game
   MEDIUM_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 10
   MEDIUM_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 7
   MEDIUM_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 10
-  MEDIUM_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 18
-  MEDIUM_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 20
+  MEDIUM_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 2# 18
+  MEDIUM_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 3# 20
   MEDIUM_MIN_ROCK_FALL_SPEED = 4.6
   MEDIUM_MAX_ROCK_FALL_SPEED = 6.2
 
@@ -34,8 +34,8 @@ class Game
   HARD_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 7
   HARD_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 6
   HARD_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 9
-  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 50
-  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 60
+  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 3# 50
+  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 4# 60
   HARD_MIN_ROCK_FALL_SPEED = 5.2
   HARD_MAX_ROCK_FALL_SPEED = 7.2
 
@@ -77,6 +77,11 @@ class Game
     state.shop_alpha = 0
     state.player = initial_player
     state.gold_modifier = 1.0
+    state.shop_leave_button_color = {
+      r: 20,
+      g: 20,
+      b: 20,
+    }
 
     state.camera = {
       x: 640.0,
@@ -124,6 +129,8 @@ class Game
       next_gold_spawn_x: Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X),
       next_gold_dy: Numeric.rand(EASY_MIN_ROCK_FALL_SPEED..EASY_MAX_ROCK_FALL_SPEED),
     }
+
+    state.shop_items = []
 
     state.player_offscreen_indicator = {
       x: 50,
@@ -281,7 +288,36 @@ class Game
       state.paused_tick = nil
     end
 
-    state.shop_close_tick = Kernel.tick_count if inputs.keyboard.key_down.m # debug input
+    return if state.shop_close_tick
+    state.shop_items.each do |b|
+      if inputs.mouse.intersect_rect?(b)
+        b.g = 200
+        b.b = 200
+
+        if inputs.mouse.click && state.player.gold >= b.price
+          state.player.gold -= b.price
+          state.player.powerups << send("#{b.item_id}_powerup")
+          state.shop_close_tick = Kernel.tick_count
+        end
+
+      else
+        b.g = 20
+        b.b = 20
+      end
+    end
+
+    if inputs.mouse.intersect_rect?(shop_leave_button_rect)
+      state.shop_leave_button_color.g = 200
+      state.shop_leave_button_color.b = 200
+
+      if inputs.mouse.click
+        state.shop_close_tick = Kernel.tick_count
+      end
+
+    else
+      state.shop_leave_button_color.g = 20
+      state.shop_leave_button_color.b = 20
+    end
   end
 
   def render_shop
@@ -297,7 +333,85 @@ class Game
       b: 220,
       a: state.shop_alpha
     }
-    outputs.watch "SHOP OPENED"
+    
+    state.shop_items.each do |si|
+      outputs.solids << {
+        x: si.x,
+        y: si.y,
+        w: si.w,
+        h: si.h,
+        r: si.r,
+        g: si.g,
+        b: si.b,
+        a: [state.shop_alpha, 190].min,
+      }
+      outputs.labels << {
+        x: si.x + (si.w / 2),
+        y: si.y + (si.w / 2) + 32,
+        anchor_x: 0.5,
+        anchor_y: 0.5,
+        size_px: 32,
+        r: 220,
+        g: 220,
+        b: 220,
+        a: state.shop_alpha,
+        text: "#{si.display_name}"
+      }
+      outputs.labels << {
+        x: si.x + (si.w / 2),
+        y: si.y + (si.w / 2) - 32,
+        anchor_x: 0.5,
+        anchor_y: 0.5,
+        size_px: 32,
+        r: 220,
+        g: 220,
+        b: 220,
+        a: state.shop_alpha,
+        text: "#{si.price}"
+      }
+    end
+
+      outputs.solids << shop_leave_button_rect
+      outputs.labels << {
+        x: Grid.w / 2 - 28,
+        y: Grid.h / 2 - 196 - 16,
+        anchor_x: 0.5,
+        anchor_y: 0.5,
+        size_px: 24,
+        r: 220,
+        g: 220,
+        b: 220,
+        a: state.shop_alpha,
+        text: "Exit the Shoppe"
+      }
+  end
+
+  def shop_leave_button_rect
+    {
+        x: Grid.w / 2 - 128 - 28,
+        y: Grid.h / 2 - 256,
+        w: 256,
+        h: 96,
+        r: state.shop_leave_button_color.r,
+        g: state.shop_leave_button_color.g,
+        b: state.shop_leave_button_color.b,
+        a: [state.shop_alpha, 190].min,
+    }
+  end
+
+  def shop_item(item_id:, price:, display_name:, x:, y:)
+    {
+      x: x,
+      y: y,
+      w: 256,
+      h: 256,
+      r: 20,
+      g: 20,
+      b: 20,
+      item_id: item_id,
+      display_name: display_name,
+      price: price,
+    }
   end
 
   def calc_longest_run_time
@@ -723,6 +837,14 @@ class Game
   def open_shop
     state.paused_tick = Kernel.tick_count
     state.shop_open_tick = Kernel.tick_count
+    state.shop_items.clear
+    padding = 64
+    item_option_width = 256
+    start_x = (Grid.w / 2) - (item_option_width) - padding
+    2.times.each_with_index do |i|
+      new_item_option = send("#{POWERUP_TYPES.sample}_powerup")
+      state.shop_items << shop_item(item_id: new_item_option.type, price: Numeric.rand(25..100), display_name: new_item_option.name, x: start_x + ((item_option_width + padding) * i), y: (Grid.h / 2) - (256 / 2))
+    end
   end
 
   def calc_current_difficulty_levers
