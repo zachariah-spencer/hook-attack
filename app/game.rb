@@ -60,6 +60,7 @@ class Game
   MAX_POWERUP_SPAWN_DELAY = 10.seconds
   POWERUP_FALL_SPEED = 4.5
   SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock, :gold_rock]
+  POWERUP_TYPES = [:up_rock, :wide_hook]
 
   def initialize args
   end
@@ -104,7 +105,8 @@ class Game
       next_rock_dy: Numeric.rand(difficulty.min_rock_fall_speed..difficulty.max_rock_fall_speed),
       next_special_rock_spawn_countdown: Numeric.rand(difficulty.min_special_rock_spawn_countdown..difficulty.max_special_rock_spawn_countdown),
       next_down_rock_spawn_countdown: Numeric.rand(difficulty.min_down_rock_spawn_countdown..difficulty.max_down_rock_spawn_countdown),
-      next_shop_rock_spawn_countdown: Numeric.rand(HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN..HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN)
+      next_shop_rock_spawn_countdown: Numeric.rand(HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN..HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN),
+      only_spawn_up_rocks: false,
     }
 
     state.powerup_manager = {
@@ -145,6 +147,7 @@ class Game
     state.player.move_direction = 0
     state.player.move_direction -= 1 if inputs.keyboard.left
     state.player.move_direction += 1 if inputs.keyboard.right
+    state.player.move_down = inputs.keyboard.down
     state.player_attack_input_pressed = inputs.keyboard.key_down.space
     state.player_attack_input_released = inputs.keyboard.key_up.space
 
@@ -360,10 +363,12 @@ class Game
       state.player.dx = [state.player.dx - state.player.deceleration, target_dx].max
     end
 
+    applied_player_fall_speed = state.player.move_down ? (MAX_PLAYER_FALL_SPEED * 1.5) : MAX_PLAYER_FALL_SPEED
+    outputs.watch "#{applied_player_fall_speed}"
     if state.player.dy < -MAX_PLAYER_FALL_SPEED
-      state.player.dy = [state.player.dy + PLAYER_FAST_FALL_RECOVERY, -MAX_PLAYER_FALL_SPEED].min
+      state.player.dy = [state.player.dy + PLAYER_FAST_FALL_RECOVERY, -applied_player_fall_speed].min
     else
-      state.player.dy = [state.player.dy - PLAYER_FALL_ACCELERATION, -MAX_PLAYER_FALL_SPEED].max
+      state.player.dy = [state.player.dy - PLAYER_FALL_ACCELERATION, -applied_player_fall_speed].max
     end
 
     # calc facing direction
@@ -564,6 +569,8 @@ class Game
   end
 
   def select_rock_type_to_spawn
+    return :up_rock if state.rock_manager.only_spawn_up_rocks
+    
     difficulty = calc_current_difficulty_levers
     state.rock_manager.next_shop_rock_spawn_countdown -= 1
     state.rock_manager.next_special_rock_spawn_countdown -= 1
@@ -597,7 +604,8 @@ class Game
 
   def calc_powerups
     if state.powerup_manager.powerup_spawn_tick.elapsed_time >= state.powerup_manager.next_powerup_spawn_delay
-      state.powerup_manager.powerups << wide_hook_powerup(spawn_x: state.powerup_manager.next_powerup_spawn_x)
+      next_powerup_type = POWERUP_TYPES.sample
+      state.powerup_manager.powerups << send("#{next_powerup_type}_powerup", spawn_x: state.powerup_manager.next_powerup_spawn_x)
       state.powerup_manager.powerup_spawn_tick = Kernel.tick_count
       state.powerup_manager.next_powerup_spawn_delay = Numeric.rand(MIN_POWERUP_SPAWN_DELAY..MAX_POWERUP_SPAWN_DELAY)
       state.powerup_manager.next_powerup_spawn_x = Numeric.rand(MIN_ROCK_SPAWN_X..MAX_ROCK_SPAWN_X)
@@ -612,12 +620,16 @@ class Game
         case p.type
         when :wide_hook
           state.hook.h = WIDE_HOOK_SIZE
+        when :up_rock
+          state.rock_manager.only_spawn_up_rocks = true
         end
       else
         if remaining_powerup_time(p) <= 0
           case p.type
           when :wide_hook
             state.hook.h = DEFAULT_HOOK_SIZE
+          when :up_rock
+            state.rock_manager.only_spawn_up_rocks = false
           end
           state.player.powerups.delete(p)
         end
@@ -950,7 +962,24 @@ class Game
       name: "Wide Hook",
       start_tick: Kernel.tick_count,
       type: :wide_hook,
-      duration: 3.0.seconds,
+      duration: 5.0.seconds,
+      active: false,
+    }
+  end
+
+  def up_rock_powerup(spawn_x: 0)
+    {
+      x: spawn_x,
+      y: 720,
+      w: 32,
+      h: 32,
+      r: 0,
+      g: 255,
+      b: 255,
+      name: "Boost Rock Avalanche",
+      start_tick: Kernel.tick_count,
+      type: :up_rock,
+      duration: 7.5.seconds,
       active: false,
     }
   end
