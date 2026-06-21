@@ -53,7 +53,10 @@ class Game
   PLAYER_FAST_FALL_RECOVERY = 0.33
   PLAYER_JUMP_VELOCITY = 22.0
   PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
+  POWERUP_DURATION = 5.0.seconds
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
+  DEFAULT_HOOK_SIZE = 16
+  WIDE_HOOK_SIZE = 64
   SPECIAL_ROCK_TYPES = [:up_rock, :bomb_rock, :gold_rock]
 
   def initialize args
@@ -89,20 +92,7 @@ class Game
       shake_strength: 0,
     }
 
-    state.hook = {
-      x: (state.player.x / 2) - 4,
-      y: (state.player.y / 2) - 4,
-      w: 16,
-      h: 16,
-      r: 255,
-      g: 0,
-      b: 0,
-      a: 255,
-      direction: 1,
-      active: false,
-      hit_target: nil
-    }
-
+    state.hook = initial_hook
     difficulty = calc_current_difficulty_levers
     state.rock_manager = {
       rocks: [],
@@ -159,6 +149,7 @@ class Game
     unless state.paused_tick
       calc_longest_run_time if state.run_started_tick
       calc_player if state.run_started_tick
+      calc_powerups if state.run_started_tick
       calc_hook
       calc_rocks
       calc_gold
@@ -188,7 +179,40 @@ class Game
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
     outputs.labels << start_instructions_label unless state.run_started_tick
     outputs.labels << [run_timer_label, longest_run_time_label, gold_label]
+    render_powerup_ui
     render_shop if state.shop_open_tick && state.shop_alpha > 0
+  end
+
+  def render_powerup_ui
+    return if player_finite_powerups.empty?
+
+    player_finite_powerups.each_with_index do |p, i|
+      time_left_ticks = remaining_powerup_time(p)
+      start_y = Grid.h - 96
+      spacing = 32
+      outputs.labels << powerup_timer_label(time_left: time_left_ticks, y: start_y - (spacing * i), display_name: p.name)
+    end
+    
+
+    
+  end
+
+  def remaining_powerup_time(p)
+    p.duration - p.start_tick.elapsed_time
+  end
+
+  def player_finite_powerups
+    state.player.powerups.select { |p| p.duration > 0 }
+  end
+
+  def add_powerup(powerup_method_name:)
+    new_powerup = send(powerup_method_name)
+    unless state.player.powerups.any? { |p| p.type == new_powerup.type }
+      state.player.powerups << new_powerup
+    else
+      duplicate_powerup = state.player.powerups.find { |p| p.type == new_powerup.type }
+      duplicate_powerup.start_tick = new_powerup.start_tick
+    end
   end
 
   def enable_input
@@ -556,6 +580,30 @@ class Game
     state.rock_manager.next_rock_dy = Numeric.rand(difficulty.min_rock_fall_speed..difficulty.max_rock_fall_speed)
   end
 
+  def calc_powerups
+    add_powerup(powerup_method_name: :wide_hook_powerup) if inputs.keyboard.key_down.i if state.run_started_tick
+
+    state.player.powerups.each do |p|
+      unless p.active
+        p.active = true
+        case p.type
+        when :wide_hook
+          state.hook.h = WIDE_HOOK_SIZE
+        end
+      else
+        if remaining_powerup_time(p) <= 0
+          case p.type
+          when :wide_hook
+            state.hook.h = DEFAULT_HOOK_SIZE
+          end
+          state.player.powerups.delete(p)
+        end
+      end
+
+      
+    end
+  end
+
   def handle_rock_effect(target_rock)
     case target_rock.type
     when :basic
@@ -648,10 +696,27 @@ class Game
     state.total_time_paused = 0
     state.run_ended_tick = Kernel.tick_count
     state.player = initial_player
+    state.hook = initial_hook
   end
 
   def shutdown
     DR.write_file "data/save.txt", "#{state.longest_run_time}" if state.longest_run_time
+  end
+
+  def initial_hook
+    {
+      x: (state.player.x / 2) - 4,
+      y: (state.player.y / 2) - 4,
+      w: 16,
+      h: DEFAULT_HOOK_SIZE,
+      r: 255,
+      g: 0,
+      b: 0,
+      a: 255,
+      direction: 1,
+      active: false,
+      hit_target: nil
+    }
   end
 
   def initial_player
@@ -674,6 +739,7 @@ class Game
       grappling_tick: nil,
       grapple_start_x: 0,
       gold: 0,
+      powerups: []
     }
   end
 
@@ -832,6 +898,30 @@ class Game
       r: 255,
       g: 255,
       b: 100,
+    }
+  end
+
+  def powerup_timer_label(time_left:, y:, display_name:)
+    {
+      x: Grid.w / 2,
+      y: y,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 32,
+      text: "#{display_name} - #{(time_left / 60).round(1)}",
+      r: 140,
+      g: 255,
+      b: 250,
+    }
+  end
+
+  def wide_hook_powerup
+    {
+      name: "Wide Hook",
+      start_tick: Kernel.tick_count,
+      type: :wide_hook,
+      duration: 3.0.seconds,
+      active: false,
     }
   end
 end
