@@ -12,8 +12,8 @@ class Game
   EASY_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 16
   EASY_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 8
   EASY_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 12
-  EASY_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 1# 14
-  EASY_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 2# 18
+  EASY_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 14
+  EASY_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 18
   EASY_MIN_ROCK_FALL_SPEED = 3.8
   EASY_MAX_ROCK_FALL_SPEED = 5.3
 
@@ -23,8 +23,8 @@ class Game
   MEDIUM_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 10
   MEDIUM_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 7
   MEDIUM_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 10
-  MEDIUM_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 2# 18
-  MEDIUM_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 3# 20
+  MEDIUM_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 18
+  MEDIUM_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 20
   MEDIUM_MIN_ROCK_FALL_SPEED = 4.6
   MEDIUM_MAX_ROCK_FALL_SPEED = 6.2
 
@@ -34,8 +34,8 @@ class Game
   HARD_MAX_DOWN_ROCK_SPAWN_COUNTDOWN = 7
   HARD_MIN_SPECIAL_ROCK_SPAWN_COUNTDOWN = 6
   HARD_MAX_SPECIAL_ROCK_SPAWN_COUNTDOWN = 9
-  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 3# 50
-  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 4# 60
+  HARD_MIN_SHOP_ROCK_SPAWN_COUNTDOWN = 20
+  HARD_MAX_SHOP_ROCK_SPAWN_COUNTDOWN = 40
   HARD_MIN_ROCK_FALL_SPEED = 5.2
   HARD_MAX_ROCK_FALL_SPEED = 7.2
 
@@ -53,6 +53,9 @@ class Game
   PLAYER_FAST_FALL_RECOVERY = 0.33
   PLAYER_JUMP_VELOCITY = 22.0
   PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
+  COMBO_RESET_DURATION = 2.0.seconds
+  COMBO_PARTICLE_DURATION = 1.0.seconds
+  COMBO_PARTICLE_FLOAT_DISTANCE = 64
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
   DEFAULT_HOOK_SIZE = 16
   WIDE_HOOK_SIZE = 64
@@ -131,6 +134,11 @@ class Game
     }
 
     state.shop_items = []
+    state.combo_manager = {
+      grapple_count: 0,
+      last_grapple_active_tick: nil,
+      particles: [],
+    }
 
     state.player_offscreen_indicator = {
       x: 50,
@@ -174,6 +182,7 @@ class Game
       calc_hook
       calc_rocks
       calc_gold
+      calc_combo
       calc_camera
       calc_collisions if state.run_started_tick
     else
@@ -195,14 +204,30 @@ class Game
     state.rock_manager.rocks.each { |r| outputs.solids << camera_transform(r) }
     state.gold_manager.gold.each { |g| outputs.solids << camera_transform(g) }
     state.powerup_manager.powerups.each { |p| outputs.solids << camera_transform(p) }
+    render_combo_particles
   end
 
   def render_ui
     outputs.sprites << state.player_offscreen_indicator if state.player.y >= Grid.h
     outputs.labels << start_instructions_label unless state.run_started_tick
     outputs.labels << [run_timer_label, longest_run_time_label, gold_label]
+    render_combo_ui
     render_powerup_ui
     render_shop if state.shop_open_tick && state.shop_alpha > 0
+  end
+
+  def render_combo_particles
+    state.combo_manager.particles.each do |p|
+      outputs.labels << camera_transform_combo_particle(p)
+    end
+  end
+
+  def render_combo_ui
+    return unless combo_timer_active?
+
+    outputs.solids << combo_timer_backdrop_rect
+    outputs.solids << combo_timer_fill_rect
+    outputs.labels << combo_count_label if combo_active?
   end
 
   def render_powerup_ui
@@ -267,6 +292,75 @@ class Game
       w: rect.w * zoom,
       h: rect.h * zoom,
     )
+  end
+
+  def camera_transform_combo_particle(particle)
+    camera = state.camera
+    zoom = camera.zoom || 1.0
+    elapsed = active_tick_count - particle.started_active_tick
+    progress = elapsed.fdiv(COMBO_PARTICLE_DURATION).clamp(0, 1)
+    screen_x = (particle.x - camera.x) * zoom + camera.screen_x + camera.shake_x
+    screen_y = (particle.y + COMBO_PARTICLE_FLOAT_DISTANCE * progress - camera.y) * zoom + camera.screen_y + camera.shake_y
+
+    {
+      x: screen_x,
+      y: screen_y,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 64,
+      text: particle.text,
+      r: 255,
+      g: 245,
+      b: 120,
+      a: 255.lerp(0, progress),
+    }
+  end
+
+  def calc_combo
+    if combo_timer_active? && combo_elapsed_since_last_grapple > COMBO_RESET_DURATION
+      state.combo_manager.grapple_count = 0
+      state.combo_manager.last_grapple_active_tick = nil
+    end
+
+    state.combo_manager.particles.reject! do |p|
+      active_tick_count - p.started_active_tick >= COMBO_PARTICLE_DURATION
+    end
+  end
+
+  def combo_active?
+    state.combo_manager.grapple_count >= 2 && state.combo_manager.last_grapple_active_tick
+  end
+
+  def combo_timer_active?
+    state.combo_manager.grapple_count > 0 && state.combo_manager.last_grapple_active_tick
+  end
+
+  def register_combo_grapple
+    if combo_timer_active? && combo_elapsed_since_last_grapple <= COMBO_RESET_DURATION
+      state.combo_manager.grapple_count += 1
+    else
+      state.combo_manager.grapple_count = 1
+    end
+
+    state.combo_manager.last_grapple_active_tick = active_tick_count
+    state.combo_manager.particles << combo_particle(number: state.combo_manager.grapple_count) if combo_active?
+  end
+
+  def combo_particle(number:)
+    {
+      x: state.player.x + state.player.w / 2,
+      y: state.player.y + state.player.h + 12,
+      text: "#{number.to_s}x",
+      started_active_tick: active_tick_count,
+    }
+  end
+
+  def active_tick_count
+    Kernel.tick_count - state.total_time_paused
+  end
+
+  def combo_elapsed_since_last_grapple
+    active_tick_count - state.combo_manager.last_grapple_active_tick
   end
 
   def calc_shop
@@ -819,6 +913,7 @@ class Game
       state.player.dy += PLAYER_JUMP_VELOCITY
       trigger_camera_shake(strength: 12, duration: 30)
     end
+    register_combo_grapple
     state.rock_manager.rocks.delete(target_rock)
   end
 
@@ -891,6 +986,13 @@ class Game
     state.run_ended_tick = Kernel.tick_count
     state.player = initial_player
     state.hook = initial_hook
+    reset_combo
+  end
+
+  def reset_combo
+    state.combo_manager.grapple_count = 0
+    state.combo_manager.last_grapple_active_tick = nil
+    state.combo_manager.particles.clear
   end
 
   def shutdown
@@ -1107,6 +1209,54 @@ class Game
       r: 140,
       g: 255,
       b: 250,
+    }
+  end
+
+  def combo_reset_time_remaining
+    return 0 unless combo_timer_active?
+
+    (COMBO_RESET_DURATION - combo_elapsed_since_last_grapple).clamp(0, COMBO_RESET_DURATION)
+  end
+
+  def combo_reset_progress
+    combo_reset_time_remaining.fdiv(COMBO_RESET_DURATION).clamp(0, 1)
+  end
+
+  def combo_timer_backdrop_rect
+    {
+      x: Grid.w / 2 - 80,
+      y: Grid.h - 78,
+      w: 160,
+      h: 10,
+      r: 20,
+      g: 20,
+      b: 20,
+      a: 180,
+    }
+  end
+
+  def combo_timer_fill_rect
+    combo_timer_backdrop_rect.merge(
+      w: 160 * combo_reset_progress,
+      r: 255,
+      g: 220,
+      b: 80,
+      a: 220,
+    )
+  end
+
+  def combo_count_label
+    {
+      x: Grid.w / 2,
+      y: Grid.h - 96,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
+      size_px: 24,
+      text: "Combo #{state.combo_manager.grapple_count}",
+      r: 255,
+      g: 245,
+      b: 120,
+      a: 255,
     }
   end
 
