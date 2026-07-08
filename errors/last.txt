@@ -1,5 +1,5 @@
 * EXCEPTION:
-* ERROR: :elapsed_time method missing on ~NilClass~.
+* ERROR: :+ method missing on ~NilClass~.
 
 #+begin_src ~NilClass#inspect~
 nil
@@ -8,13 +8,15 @@ nil
 
 
 The method named
-  :elapsed_time
+  :+
+with args
+  [nil]
 doesn't exist on [NilClass, NilClassFalseClass].
 
 (suggestions above)
 ** Backtrace:
-*** app/game.rb:216:in render_hook_shot
-*** app/game.rb:208:in render_world
-*** app/game.rb:201:in render
-*** app/game.rb:162:in tick
+*** app/game.rb:859:in calc_rocks
+*** app/game.rb:857:in calc_rocks
+*** app/game.rb:190:in calc
+*** app/game.rb:164:in tick
 *** app/main.rb:13:in tick

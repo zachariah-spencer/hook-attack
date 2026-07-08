@@ -200,7 +200,7 @@ class Game
   end
 
   def render
-    outputs.background_color = [26,26,26]
+    outputs.background_color = [0,0,0]
     render_world
     render_ui
   end
@@ -856,6 +856,7 @@ class Game
 
     state.rock_manager.rocks.each do |r|
       r.y -= r.dy unless r.break_started_tick
+      r.angle += r.dang if r.type == :basic && !r.break_started_tick
     end
 
     state.rock_manager.rocks.reject! do |rock|
@@ -1141,7 +1142,7 @@ class Game
   def initial_player
     {
       x: Grid.w / 2 - 16,
-      y: Grid.h - 64,
+      y: Grid.h - 128,
       w: 64,
       h: 64,
       dx: 0,
@@ -1166,13 +1167,18 @@ class Game
   def basic_rock(spawn_x:, fall_speed:)
     {
       x: spawn_x,
-      y: 720,
+      y: 800,
+      anchor_x: 0.5,
+      anchor_y: 0.5,
       w: 64,
       h: 64,
       r: 255,
       g: 255,
       b: 255,
+      angle: Numeric.rand(-360..360),
+      dang: Numeric.rand(-1.2..1.2),
       dy: fall_speed,
+      
       type: :basic,
       path: "sprites/rocks/basic_rock.png",
     }
@@ -1274,9 +1280,9 @@ class Game
       size_px: 96,
       font: FONT,
       text: "Press A or D to Play",
-      r: 140,
-      g: 255,
-      b: 140,
+      r: 95,
+      g: 15,
+      b: 185,
     }
   end
 
@@ -1292,40 +1298,40 @@ class Game
       anchor_y: 0.5,
       size_px: 64,
       font: FONT,
-      text: "#{timer_value_seconds.round(1)}",
-      r: 140,
-      g: 255,
-      b: 140,
+      text: "Time: #{timer_value_seconds.round(1)}",
+      r: 95,
+      g: 15,
+      b: 185,
     }
   end
 
   def longest_run_time_label
       {
-      x: 32,
+      x: 96,
       y: Grid.h - 32,
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 32,
       font: FONT,
-      text: "#{state.longest_run_time}",
-      r: 140,
-      g: 255,
-      b: 140,
+      text: "Best Time: #{state.longest_run_time}",
+      r: 95,
+      g: 15,
+      b: 185,
     }
   end
 
   def gold_label
       {
-      x: Grid.w - 32,
+      x: Grid.w - 32 - 32,
       y: Grid.h - 32,
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 32,
       font: FONT,
-      text: "#{state.player.gold.round(0)}",
-      r: 255,
-      g: 255,
-      b: 100,
+      text: "Gold: #{state.player.gold.round(0)}",
+      r: 95,
+      g: 15,
+      b: 185,
     }
   end
 
@@ -1360,19 +1366,19 @@ class Game
       y: Grid.h - 78,
       w: 160,
       h: 10,
-      r: 20,
-      g: 20,
-      b: 20,
-      a: 180,
+      r: 95,
+      g: 15,
+      b: 185,
+      a: 100,
     }
   end
 
   def combo_timer_fill_rect
     combo_timer_backdrop_rect.merge(
       w: 160 * combo_reset_progress,
-      r: 255,
-      g: 220,
-      b: 80,
+      r: 95,
+      g: 15,
+      b: 185,
       a: 220,
     )
   end
@@ -1386,9 +1392,9 @@ class Game
       size_px: 24,
       font: FONT,
       text: "Combo #{state.combo_manager.grapple_count}",
-      r: 255,
-      g: 245,
-      b: 120,
+      r: 95,
+      g: 15,
+      b: 185,
       a: 255,
     }
   end
