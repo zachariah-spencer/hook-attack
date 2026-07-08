@@ -1,5 +1,5 @@
 * EXCEPTION:
-* ERROR: :> method missing on ~NilClass~.
+* ERROR: :elapsed_time method missing on ~NilClass~.
 
 #+begin_src ~NilClass#inspect~
 nil
@@ -8,18 +8,13 @@ nil
 
 
 The method named
-  :>
-with args
-  [0]
+  :elapsed_time
 doesn't exist on [NilClass, NilClassFalseClass].
 
 (suggestions above)
 ** Backtrace:
-*** app/game.rb:335:in combo_timer_active?
-*** app/game.rb:339:in register_combo_grapple
-*** app/game.rb:916:in handle_rock_effect
-*** app/game.rb:676:in grapple_to_rock
-*** app/game.rb:621:in calc_player
-*** app/game.rb:180:in calc
-*** app/game.rb:157:in tick
+*** app/game.rb:216:in render_hook_shot
+*** app/game.rb:208:in render_world
+*** app/game.rb:201:in render
+*** app/game.rb:162:in tick
 *** app/main.rb:13:in tick

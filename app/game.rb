@@ -1,6 +1,7 @@
 class Game
   attr_dr
 
+  FONT = "fonts/carterone.ttf"
 
   DIFFICULTY_RAMP_DURATION = 105.seconds
   EASY_TO_MEDIUM_DIFFICULTY_DURATION = 35.seconds
@@ -47,17 +48,23 @@ class Game
   GOLD_ATTRACTION_STRENGTH = 10.0
   MAX_HOOK_DURATION = 0.4.seconds
   MAX_HOOK_LENGTH = 256.0
+  HOOK_SHOT_FRAME_COUNT = 9
+  HOOK_SHOT_WIDTH = 256
+  HOOK_SHOT_HEIGHT = 128
   GRAPPLE_DURATION = 0.25.seconds
   MAX_PLAYER_FALL_SPEED = 2.5
   PLAYER_FALL_ACCELERATION = 0.8
   PLAYER_FAST_FALL_RECOVERY = 0.33
   PLAYER_JUMP_VELOCITY = 22.0
   PLAYER_BOOSTED_JUMP_VELOCITY = PLAYER_JUMP_VELOCITY * 1.5
+  PLAYER_JUMP_SPRITE_DURATION = 0.5.seconds
   COMBO_RESET_DURATION = 2.0.seconds
   COMBO_PARTICLE_DURATION = 1.0.seconds
   COMBO_PARTICLE_FLOAT_DISTANCE = 64
   BOMB_ROCK_EXPLOSION_RADIUS = 1280.0
-  DEFAULT_HOOK_SIZE = 16
+  ROCK_BREAK_FRAME_COUNT = 5
+  ROCK_BREAK_FRAME_HOLD = 3
+  DEFAULT_HOOK_SIZE = 24
   WIDE_HOOK_SIZE = 64
   MIN_POWERUP_SPAWN_DELAY = 20.seconds
   MAX_POWERUP_SPAWN_DELAY = 35.seconds
@@ -193,18 +200,86 @@ class Game
   end
 
   def render
-    outputs.background_color = [40,40,40]
+    outputs.background_color = [26,26,26]
     render_world
     render_ui
   end
 
   def render_world
-    outputs.solids << camera_transform(state.player)
+    outputs.sprites << camera_transform(
+      state.player.merge(
+        path: player_sprite_path,
+        flip_horizontally: state.player.face_direction < 0,
+      )
+    )
     outputs.solids << camera_transform(state.hook) if player_attacking?
-    state.rock_manager.rocks.each { |r| outputs.solids << camera_transform(r) }
-    state.gold_manager.gold.each { |g| outputs.solids << camera_transform(g) }
-    state.powerup_manager.powerups.each { |p| outputs.solids << camera_transform(p) }
+    render_hook_shot
+    state.rock_manager.rocks.each do |rock|
+      outputs.sprites << camera_transform(
+        rock.merge(path: rock_sprite_path(rock))
+      )
+    end
+    state.gold_manager.gold.each { |g| outputs.sprites << camera_transform(g) }
+    state.powerup_manager.powerups.each { |p| outputs.sprites << camera_transform(p) }
     render_combo_particles
+  end
+
+  def render_hook_shot
+    return unless state.player.hook_shot_started_tick
+
+    frame_index =
+      if state.player.hook_shot_recovery_tick
+        recovery_frame_index = Numeric.frame_index(
+          start_at: state.player.hook_shot_recovery_tick,
+          count: 2,
+          hold_for: 3,
+          repeat: false,
+        )
+        recovery_frame_index + 7 if recovery_frame_index
+      else
+        Numeric.frame_index(
+          start_at: state.player.hook_shot_started_tick,
+          count: HOOK_SHOT_FRAME_COUNT,
+          hold_for: 5,
+          repeat: false,
+        )
+      end
+    return unless frame_index
+
+    hook_shot = {
+      x: state.hook.direction > 0 ? state.player.x + state.player.w : state.player.x - HOOK_SHOT_WIDTH,
+      y: state.player.y + (state.player.h - HOOK_SHOT_HEIGHT) / 2,
+      w: HOOK_SHOT_WIDTH,
+      h: HOOK_SHOT_HEIGHT,
+      path: "sprites/hook/hook_shot/hook_shot#{frame_index.to_s.rjust(4, "0")}.png",
+      flip_horizontally: state.hook.direction < 0,
+    }
+
+    outputs.sprites << camera_transform(hook_shot)
+  end
+
+  def player_sprite_path
+    return "sprites/player/grabbing_rock_player.png" if state.player.grappling_tick
+
+    if state.player.jump_sprite_started_tick &&
+       state.player.jump_sprite_started_tick.elapsed_time < PLAYER_JUMP_SPRITE_DURATION
+      return "sprites/player/jumping_player.png"
+    end
+
+    "sprites/player/idle_player.png"
+  end
+
+  def rock_sprite_path rock
+    return rock.path unless rock.break_started_tick
+
+    frame_index = Numeric.frame_index(
+      start_at: rock.break_started_tick,
+      count: ROCK_BREAK_FRAME_COUNT,
+      hold_for: ROCK_BREAK_FRAME_HOLD,
+      repeat: false,
+    )
+
+    "sprites/rocks/rock_break/rock_break_#{frame_index.to_s.rjust(4, "0")}.png"
   end
 
   def render_ui
@@ -308,6 +383,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 64,
+      font: FONT,
       text: particle.text,
       r: 255,
       g: 245,
@@ -421,6 +497,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 64,
+      font: FONT,
       text: "The Rock Shoppe",
       r: 220,
       g: 220,
@@ -445,6 +522,7 @@ class Game
         anchor_x: 0.5,
         anchor_y: 0.5,
         size_px: 32,
+        font: FONT,
         r: 220,
         g: 220,
         b: 220,
@@ -457,6 +535,7 @@ class Game
         anchor_x: 0.5,
         anchor_y: 0.5,
         size_px: 32,
+        font: FONT,
         r: 220,
         g: 220,
         b: 220,
@@ -472,6 +551,7 @@ class Game
         anchor_x: 0.5,
         anchor_y: 0.5,
         size_px: 24,
+        font: FONT,
         r: 220,
         g: 220,
         b: 220,
@@ -610,9 +690,19 @@ class Game
     # calc attacking
     if state.player_attack_input_pressed && !player_attacking?
       state.player.attacked_tick = Kernel.tick_count 
+      state.player.hook_shot_started_tick = Kernel.tick_count
+      state.player.hook_shot_recovery_tick = nil
+      state.player.jump_sprite_started_tick = nil
       state.hook.direction = state.player.face_direction
     end
-    state.player.attacked_tick = nil if state.player.attacked_tick && !player_attacking? || state.player_attack_input_released
+
+    if state.player_attack_input_released && player_attacking?
+      state.player.hook_shot_recovery_tick = Kernel.tick_count
+    end
+
+    if state.player.attacked_tick && (!player_attacking? || state.player_attack_input_released)
+      state.player.attacked_tick = nil
+    end
 
     calc_player_offscreen_indicator
 
@@ -729,7 +819,7 @@ class Game
 
     if state.player.carried_by_eagle
       rocks_hit = state.rock_manager.rocks.select do |rock|
-        state.player.intersect_rect?(rock)
+        !rock.break_started_tick && state.player.intersect_rect?(rock)
       end
 
       rocks_hit.each do |rock|
@@ -741,7 +831,9 @@ class Game
     return unless state.hook.active
 
     rocks_hit = []
-    state.rock_manager.rocks.each { |r| rocks_hit << r if state.hook.intersect_rect?(r) }
+    state.rock_manager.rocks.each do |rock|
+      rocks_hit << rock if !rock.break_started_tick && state.hook.intersect_rect?(rock)
+    end
 
     previous_tick_hit_target = state.hook.hit_target
     state.hook.hit_target = find_first_rock_hit(rocks_hit)
@@ -749,6 +841,7 @@ class Game
     if state.hook.hit_target && !previous_tick_hit_target
       disable_input
       state.player.grappling_tick = Kernel.tick_count
+      state.player.hook_shot_recovery_tick = Kernel.tick_count
       state.player.grapple_start_x = state.player.x
       trigger_camera_zoom(target: 1.05, zoom_in_duration: GRAPPLE_DURATION, zoom_out_duration: 20)
     end
@@ -762,10 +855,23 @@ class Game
     end
 
     state.rock_manager.rocks.each do |r|
-      r.y -= r.dy
+      r.y -= r.dy unless r.break_started_tick
     end
 
-    state.rock_manager.rocks.reject! { |r| r.y < -32 }
+    state.rock_manager.rocks.reject! do |rock|
+      rock.y < -32 || rock_break_animation_complete?(rock)
+    end
+  end
+
+  def rock_break_animation_complete? rock
+    return false unless rock.break_started_tick
+
+    Numeric.frame_index(
+      start_at: rock.break_started_tick,
+      count: ROCK_BREAK_FRAME_COUNT,
+      hold_for: ROCK_BREAK_FRAME_HOLD,
+      repeat: false,
+    ).nil?
   end
 
   def calc_gold
@@ -885,36 +991,53 @@ class Game
   end
 
   def handle_rock_effect(target_rock)
+    return if target_rock.break_started_tick
+
     case target_rock.type
     when :basic
       state.player.dy += PLAYER_JUMP_VELOCITY
+      boosted_upward = true
       trigger_camera_shake(strength: 12, duration: 30)
     when :bomb
       state.player.dy += PLAYER_JUMP_VELOCITY
+      boosted_upward = true
       trigger_camera_shake(strength: 30, duration: 120)
-      state.rock_manager.rocks.reject! do |other_r|
-        other_r != target_rock && Geometry.distance(target_rock, other_r) <= BOMB_ROCK_EXPLOSION_RADIUS
+      state.rock_manager.rocks.each do |other_r|
+        next if other_r == target_rock
+        next if other_r.break_started_tick
+        next if Geometry.distance(target_rock, other_r) > BOMB_ROCK_EXPLOSION_RADIUS
+
+        start_rock_break_animation(other_r)
       end
     when :down
       state.player.dy += -PLAYER_JUMP_VELOCITY / 2
       trigger_camera_shake(strength: 50, duration: 20)
     when :up
       state.player.dy += PLAYER_BOOSTED_JUMP_VELOCITY
+      boosted_upward = true
       trigger_camera_shake(strength: 50, duration: 20)
     when :shop
       open_shop
       state.player.dy += PLAYER_JUMP_VELOCITY
+      boosted_upward = true
       trigger_camera_shake(strength: 12, duration: 30)
     when :gold
       state.player.dy += PLAYER_JUMP_VELOCITY
+      boosted_upward = true
       trigger_camera_shake(strength: 12, duration: 30)
       state.player.gold += 5 * state.gold_modifier
     when :default
       state.player.dy += PLAYER_JUMP_VELOCITY
+      boosted_upward = true
       trigger_camera_shake(strength: 12, duration: 30)
     end
+    state.player.jump_sprite_started_tick = Kernel.tick_count
     register_combo_grapple
-    state.rock_manager.rocks.delete(target_rock)
+    start_rock_break_animation(target_rock)
+  end
+
+  def start_rock_break_animation rock
+    rock.break_started_tick ||= Kernel.tick_count
   end
 
   def find_first_rock_hit(hits_array)
@@ -1003,12 +1126,12 @@ class Game
     {
       x: (state.player.x / 2) - 4,
       y: (state.player.y / 2) - 4,
-      w: 16,
+      w: 40,
       h: DEFAULT_HOOK_SIZE,
       r: 255,
       g: 0,
       b: 0,
-      a: 255,
+      a: 0,
       direction: 1,
       active: false,
       hit_target: nil
@@ -1019,11 +1142,8 @@ class Game
     {
       x: Grid.w / 2 - 16,
       y: Grid.h - 64,
-      w: 32,
-      h: 32,
-      r: 0,
-      g: 255,
-      b: 255,
+      w: 64,
+      h: 64,
       dx: 0,
       dy: 0,
       face_direction: 1,
@@ -1032,6 +1152,9 @@ class Game
       deceleration: 0.35,
       max_speed: 5.0,
       attacked_tick: nil,
+      hook_shot_started_tick: nil,
+      hook_shot_recovery_tick: nil,
+      jump_sprite_started_tick: nil,
       grappling_tick: nil,
       grapple_start_x: 0,
       gold: 0,
@@ -1044,13 +1167,14 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 16,
-      h: 16,
+      w: 64,
+      h: 64,
       r: 255,
       g: 255,
       b: 255,
       dy: fall_speed,
       type: :basic,
+      path: "sprites/rocks/basic_rock.png",
     }
   end
 
@@ -1058,13 +1182,14 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 16,
-      h: 16,
-      r: 100,
-      g: 100,
-      b: 100,
+      w: 64,
+      h: 64,
+      r: 255,
+      g: 255,
+      b: 255,
       dy: fall_speed,
       type: :bomb,
+      path: "sprites/rocks/bomb_rock.png",
     }
   end
 
@@ -1072,13 +1197,14 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 16,
-      h: 16,
+      w: 64,
+      h: 64,
       r: 255,
-      g: 20,
-      b: 20,
+      g: 255,
+      b: 255,
       dy: fall_speed,
       type: :down,
+      path: "sprites/rocks/down_rock.png",
     }
   end
 
@@ -1086,13 +1212,14 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 16,
-      h: 16,
-      r: 120,
+      w: 64,
+      h: 64,
+      r: 255,
       g: 255,
       b: 255,
       dy: fall_speed,
       type: :up,
+      path: "sprites/rocks/up_rock.png",
     }
   end
 
@@ -1100,13 +1227,14 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 16,
-      h: 16,
-      r: 230,
-      g: 230,
-      b: 80,
+      w: 64,
+      h: 64,
+      r: 255,
+      g: 255,
+      b: 255,
       dy: fall_speed,
       type: :gold,
+      path: "sprites/rocks/gold_rock.png",
     }
   end
 
@@ -1114,13 +1242,14 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 16,
-      h: 16,
-      r: 120,
+      w: 64,
+      h: 64,
+      r: 255,
       g: 255,
-      b: 120,
+      b: 255,
       dy: fall_speed,
       type: :shop,
+      path: "sprites/rocks/gold_ore.png",
     }
   end
 
@@ -1128,13 +1257,11 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 8,
-      h: 8,
-      r: 255,
-      g: 255,
-      b: 80,
+      w: 16,
+      h: 16,
       dy: fall_speed * 1.5,
-      type: :shop
+      type: :shop,
+      path: "sprites/rocks/gold_ore.png",
     }
   end
 
@@ -1145,6 +1272,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 96,
+      font: FONT,
       text: "Press A or D to Play",
       r: 140,
       g: 255,
@@ -1163,6 +1291,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 64,
+      font: FONT,
       text: "#{timer_value_seconds.round(1)}",
       r: 140,
       g: 255,
@@ -1177,6 +1306,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 32,
+      font: FONT,
       text: "#{state.longest_run_time}",
       r: 140,
       g: 255,
@@ -1191,6 +1321,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 32,
+      font: FONT,
       text: "#{state.player.gold.round(0)}",
       r: 255,
       g: 255,
@@ -1205,6 +1336,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 32,
+      font: FONT,
       text: "#{display_name} - #{(time_left / 60).round(1)}",
       r: 140,
       g: 255,
@@ -1252,6 +1384,7 @@ class Game
       anchor_x: 0.5,
       anchor_y: 0.5,
       size_px: 24,
+      font: FONT,
       text: "Combo #{state.combo_manager.grapple_count}",
       r: 255,
       g: 245,
@@ -1264,10 +1397,11 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 32,
-      h: 32,
+      w: 64,
+      h: 64,
+      path: "sprites/powerups/wide_hook_powerup.png",
       r: 255,
-      g: 0,
+      g: 255,
       b: 255,
       name: "Wide Hook",
       start_tick: Kernel.tick_count,
@@ -1281,9 +1415,10 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 32,
-      h: 32,
-      r: 0,
+      w: 64,
+      h: 64,
+      path: "sprites/powerups/up_rock_powerup.png",
+      r: 255,
       g: 255,
       b: 255,
       name: "Boost Rock Avalanche",
@@ -1298,11 +1433,12 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 32,
-      h: 32,
+      w: 64,
+      h: 64,
+      path: "sprites/powerups/gold_rush_powerup.png",
       r: 255,
       g: 255,
-      b: 0,
+      b: 255,
       name: "Gold Rush!(2x $)",
       start_tick: Kernel.tick_count,
       type: :gold_rush,
@@ -1315,11 +1451,12 @@ class Game
     {
       x: spawn_x,
       y: 720,
-      w: 32,
-      h: 32,
+      w: 64,
+      h: 64,
+      path: "sprites/powerups/eagle_powerup.png",
       r: 255,
-      g: 105,
-      b: 180,
+      g: 255,
+      b: 255,
       name: "Eagle",
       start_tick: Kernel.tick_count,
       type: :eagle,
